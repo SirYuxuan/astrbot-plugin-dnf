@@ -1,5 +1,4 @@
 import requests
-import re
 
 
 class DnfGoldRatioFetcher:
@@ -43,28 +42,20 @@ class DnfGoldRatioFetcher:
             ratios = []
             results = []
             for idx, it in enumerate(items, 1):
-                # 使用 trade + amount（带单位）作为标题，不使用 shopno
-                trade = (it.get("trade") or "").strip()
+                # 使用 amount（带单位）作为标题，不使用 shopno
                 amount_field = it.get("amount") or it.get("number") or ""
                 # 格式化 amount：若能解析为数字且为整数则不显示小数点
+                amount_value = None
                 try:
-                    af = float(amount_field)
-                    if af.is_integer():
-                        amount_str = str(int(af))
+                    amount_value = float(amount_field)
+                    if amount_value.is_integer():
+                        amount_str = str(int(amount_value))
                     else:
                         # 去掉不必要的尾随 0
-                        amount_str = ("%f" % af).rstrip('0').rstrip('.')
+                        amount_str = ("%f" % amount_value).rstrip('0').rstrip('.')
                 except Exception:
                     amount_str = str(amount_field)
                 unit = it.get("unit") or ""
-                # 如果 trade 为 '担保'，则不显示该词，只显示数量和单位
-                if trade == "担保":
-                    title_text = f"{amount_str}{unit}".strip()
-                elif trade:
-                    title_text = f"{trade} {amount_str}{unit}".strip()
-                else:
-                    title_text = f"{amount_str}{unit}".strip()
-
                 # price 是总价（元），singleprice 是 元/单位，两者等价可用来计算比率
                 price_raw = it.get("price")
                 try:
@@ -73,14 +64,10 @@ class DnfGoldRatioFetcher:
                     price = None
 
                 ratio_val = None
-                if price and price > 0:
+                if price and price > 0 and amount_value is not None:
                     # ratio = amount(单位：万金币) / price(元) -> 万金币/元
-                    try:
-                        ratio_val = af / price
-                    except Exception:
-                        ratio_val = None
-                    if ratio_val:
-                        ratios.append(ratio_val)
+                    ratio_val = amount_value / price
+                    ratios.append(ratio_val)
 
                 price_text = f"{price:.2f}" if price is not None else "-"
                 ratio_text = f"1元={ratio_val:.4f}万金币" if ratio_val else "1元= - 万金币"
@@ -95,4 +82,3 @@ class DnfGoldRatioFetcher:
             return "\n".join(results)
         except Exception as e:
             return f"查询金币比例失败：{e}"
-

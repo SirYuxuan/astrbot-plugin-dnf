@@ -1,0 +1,8 @@
+.wrangler/
+__pycache__/
+*.py[cod]
+
+last_avg_ratio.json
+last_sent_avg_ratio.json
+last_oil_data.json
+last_egg_sent_date.json

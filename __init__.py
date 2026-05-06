@@ -1,0 +1,1 @@
+"""AstrBot DNF plugin package."""

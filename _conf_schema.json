@@ -1,0 +1,148 @@
+{
+  "platform": {
+    "description": "平台适配配置",
+    "type": "object",
+    "items": {
+      "name": {
+        "description": "用于主动推送的 AstrBot 平台名称",
+        "type": "string",
+        "default": "aiocqhttp"
+      }
+    }
+  },
+  "gold": {
+    "description": "DNF 金币比例监控配置",
+    "type": "object",
+    "items": {
+      "monitor_enabled": {
+        "description": "是否启用金币比例定时监控",
+        "type": "bool",
+        "default": true
+      },
+      "notify_group_id": {
+        "description": "金币比例波动推送群号",
+        "type": "int",
+        "default": 101344113
+      },
+      "interval_seconds": {
+        "description": "金币比例检测间隔，单位秒",
+        "type": "int",
+        "default": 60
+      },
+      "change_threshold": {
+        "description": "金币均价变化达到多少万金币时推送",
+        "type": "float",
+        "default": 2.0
+      }
+    }
+  },
+  "oil": {
+    "description": "油价监控配置",
+    "type": "object",
+    "items": {
+      "monitor_enabled": {
+        "description": "是否启用油价每日监控",
+        "type": "bool",
+        "default": true
+      },
+      "notify_group_id": {
+        "description": "油价变动推送群号",
+        "type": "int",
+        "default": 101344113
+      },
+      "monitor_areas": {
+        "description": "油价监控地区列表",
+        "type": "list",
+        "default": ["河南"]
+      },
+      "check_hour": {
+        "description": "每日检查小时，0-23",
+        "type": "int",
+        "default": 8
+      },
+      "startup_notice_enabled": {
+        "description": "插件启动时是否发送一次油价通知",
+        "type": "bool",
+        "default": true
+      }
+    }
+  },
+  "egg": {
+    "description": "蛋价监控配置",
+    "type": "object",
+    "items": {
+      "monitor_enabled": {
+        "description": "是否启用蛋价每日推送",
+        "type": "bool",
+        "default": true
+      },
+      "notify_group_id": {
+        "description": "蛋价推送群号",
+        "type": "int",
+        "default": 527189909
+      },
+      "monitor_area": {
+        "description": "蛋价每日推送地区",
+        "type": "string",
+        "default": "平舆"
+      },
+      "interval_seconds": {
+        "description": "蛋价检测间隔，单位秒",
+        "type": "int",
+        "default": 3600
+      },
+      "daily_limit": {
+        "description": "蛋价查询和推送最多展示条数",
+        "type": "int",
+        "default": 10
+      }
+    }
+  },
+  "image_ai": {
+    "description": "画图 AI 配置，默认关闭；填写 endpoint 和 api_key 后可启用 /画图",
+    "type": "object",
+    "items": {
+      "enabled": {
+        "description": "是否启用画图命令",
+        "type": "bool",
+        "default": false
+      },
+      "endpoint": {
+        "description": "图片生成 API 地址，例如 Azure OpenAI images/generations endpoint",
+        "type": "string",
+        "default": ""
+      },
+      "api_key": {
+        "description": "图片生成 API Key",
+        "type": "string",
+        "default": "",
+        "obvious_hint": true
+      },
+      "auth_header": {
+        "description": "鉴权请求头，Azure OpenAI 通常为 api-key；兼容 Bearer 时填 Authorization",
+        "type": "string",
+        "default": "api-key"
+      },
+      "size": {
+        "description": "图片尺寸",
+        "type": "string",
+        "default": "1024x1024"
+      },
+      "quality": {
+        "description": "图片质量",
+        "type": "string",
+        "default": "low"
+      },
+      "output_format": {
+        "description": "输出格式",
+        "type": "string",
+        "default": "png"
+      },
+      "timeout_seconds": {
+        "description": "图片生成超时时间，单位秒",
+        "type": "int",
+        "default": 180
+      }
+    }
+  }
+}
