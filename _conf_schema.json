@@ -1,145 +1,246 @@
 {
   "platform": {
-    "description": "平台适配配置",
+    "description": "平台配置",
+    "hint": "用于主动推送消息的平台适配。",
     "type": "object",
     "items": {
       "name": {
-        "description": "用于主动推送的 AstrBot 平台名称",
+        "description": "平台名称",
+        "hint": "用于主动推送的 AstrBot 平台名称。",
         "type": "string",
         "default": "aiocqhttp"
       }
     }
   },
   "gold": {
-    "description": "DNF 金币比例监控配置",
+    "description": "金币监控",
+    "hint": "DNF 金币比例查询和波动推送配置。",
     "type": "object",
     "items": {
       "monitor_enabled": {
-        "description": "是否启用金币比例定时监控",
+        "description": "启用监控",
+        "hint": "是否定时检测金币比例变化。",
         "type": "bool",
         "default": true
       },
       "notify_group_id": {
-        "description": "金币比例波动推送群号",
+        "description": "推送群号",
+        "hint": "金币比例波动通知发送到这个群。",
         "type": "int",
         "default": 101344113
       },
       "interval_seconds": {
-        "description": "金币比例检测间隔，单位秒",
+        "description": "检测间隔",
+        "hint": "金币比例检测间隔，单位秒。",
         "type": "int",
         "default": 60
       },
       "change_threshold": {
-        "description": "金币均价变化达到多少万金币时推送",
+        "description": "波动阈值",
+        "hint": "金币均价变化达到多少万金币时推送。",
         "type": "float",
         "default": 2.0
       }
     }
   },
   "oil": {
-    "description": "油价监控配置",
+    "description": "油价监控",
+    "hint": "油价查询和每日变动推送配置。",
     "type": "object",
     "items": {
       "monitor_enabled": {
-        "description": "是否启用油价每日监控",
+        "description": "启用监控",
+        "hint": "是否每天检查油价变化。",
         "type": "bool",
         "default": true
       },
       "notify_group_id": {
-        "description": "油价变动推送群号",
+        "description": "推送群号",
+        "hint": "油价变动通知发送到这个群。",
         "type": "int",
         "default": 101344113
       },
       "monitor_areas": {
-        "description": "油价监控地区列表",
+        "description": "监控地区",
+        "hint": "油价监控地区列表，例如 [\"河南\", \"北京\"]。",
         "type": "list",
         "default": ["河南"]
       },
       "check_hour": {
-        "description": "每日检查小时，0-23",
+        "description": "检查小时",
+        "hint": "每日检查小时，范围 0-23。",
         "type": "int",
         "default": 8
       },
       "startup_notice_enabled": {
-        "description": "插件启动时是否发送一次油价通知",
+        "description": "启动通知",
+        "hint": "插件启动时是否发送一次油价通知。",
         "type": "bool",
         "default": true
       }
     }
   },
   "egg": {
-    "description": "蛋价监控配置",
+    "description": "蛋价监控",
+    "hint": "蛋价查询和每日推送配置。",
     "type": "object",
     "items": {
       "monitor_enabled": {
-        "description": "是否启用蛋价每日推送",
+        "description": "启用推送",
+        "hint": "是否启用蛋价每日推送。",
         "type": "bool",
         "default": true
       },
       "notify_group_id": {
-        "description": "蛋价推送群号",
+        "description": "推送群号",
+        "hint": "蛋价通知发送到这个群。",
         "type": "int",
         "default": 527189909
       },
       "monitor_area": {
-        "description": "蛋价每日推送地区",
+        "description": "推送地区",
+        "hint": "蛋价每日推送地区。",
         "type": "string",
         "default": "平舆"
       },
       "interval_seconds": {
-        "description": "蛋价检测间隔，单位秒",
+        "description": "检测间隔",
+        "hint": "蛋价检测间隔，单位秒。",
         "type": "int",
         "default": 3600
       },
       "daily_limit": {
-        "description": "蛋价查询和推送最多展示条数",
+        "description": "展示条数",
+        "hint": "蛋价查询和推送最多展示条数。",
         "type": "int",
         "default": 10
       }
     }
   },
   "image_ai": {
-    "description": "画图 AI 配置，默认关闭；填写 endpoint 和 api_key 后可启用 /画图",
+    "description": "图片生成",
+    "hint": "默认关闭；填写接口地址和 API Key 后可启用 /画图 和 /图生图。",
     "type": "object",
     "items": {
       "enabled": {
-        "description": "是否启用画图命令",
+        "description": "启用图片生成",
+        "hint": "是否启用 /画图 和 /图生图 命令。",
         "type": "bool",
         "default": false
       },
-      "endpoint": {
-        "description": "图片生成 API 地址，例如 Azure OpenAI images/generations endpoint",
+      "text_provider": {
+        "description": "文生图服务",
+        "hint": "microsoft 使用微软/OpenAI；fal 使用 FAL。",
+        "type": "string",
+        "default": "microsoft"
+      },
+      "edit_provider": {
+        "description": "图生图服务",
+        "hint": "microsoft 使用微软/OpenAI multipart；fal 使用 FAL。",
+        "type": "string",
+        "default": "microsoft"
+      },
+      "microsoft_endpoint": {
+        "description": "微软文生图接口",
+        "hint": "微软/OpenAI 文生图接口，例如 https://资源.services.ai.azure.com/openai/v1/images/generations。",
         "type": "string",
         "default": ""
       },
-      "api_key": {
-        "description": "图片生成 API Key",
+      "microsoft_edit_endpoint": {
+        "description": "微软图生图接口",
+        "hint": "微软/OpenAI multipart 图生图接口；留空时由文生图接口自动推导。",
+        "type": "string",
+        "default": ""
+      },
+      "microsoft_api_key": {
+        "description": "微软 API Key",
+        "hint": "微软/OpenAI 图片接口密钥。",
         "type": "string",
         "default": "",
         "obvious_hint": true
       },
-      "auth_header": {
-        "description": "鉴权请求头，Azure OpenAI 通常为 api-key；兼容 Bearer 时填 Authorization",
+      "microsoft_auth_header": {
+        "description": "微软鉴权 Header",
+        "hint": "Azure AI Foundry v1 接口填 Authorization；旧 Azure OpenAI 接口通常填 api-key。",
         "type": "string",
         "default": "api-key"
       },
+      "fal_text_endpoint": {
+        "description": "FAL 文生图接口",
+        "hint": "例如 https://queue.fal.run/openai/gpt-image-2。",
+        "type": "string",
+        "default": ""
+      },
+      "fal_edit_endpoint": {
+        "description": "FAL 图生图接口",
+        "hint": "例如 https://queue.fal.run/openai/gpt-image-2/edit。",
+        "type": "string",
+        "default": ""
+      },
+      "fal_key": {
+        "description": "FAL Key",
+        "hint": "FAL 接口密钥。",
+        "type": "string",
+        "default": "",
+        "obvious_hint": true
+      },
+      "fal_poll_interval_seconds": {
+        "description": "FAL 轮询间隔",
+        "hint": "FAL 队列接口返回 request_id 后的查询间隔，单位秒。",
+        "type": "int",
+        "default": 2
+      },
+      "fal_timeout_seconds": {
+        "description": "FAL 超时时间",
+        "hint": "等待 FAL 队列任务完成的最长时间，单位秒。",
+        "type": "int",
+        "default": 180
+      },
+      "model": {
+        "description": "模型名称",
+        "hint": "Azure AI Foundry v1 接口需要填写，例如 gpt-image-2。",
+        "type": "string",
+        "default": ""
+      },
       "size": {
         "description": "图片尺寸",
+        "hint": "微软使用 1024x1024；FAL 可使用 1024x1024 或宽高对象能力对应的字符串。",
         "type": "string",
         "default": "1024x1024"
       },
       "quality": {
         "description": "图片质量",
+        "hint": "生成图片质量，例如 medium。",
         "type": "string",
-        "default": "low"
+        "default": "medium"
       },
       "output_format": {
         "description": "输出格式",
+        "hint": "生成图片输出格式，例如 jpeg。",
         "type": "string",
-        "default": "png"
+        "default": "jpeg"
+      },
+      "output_compression": {
+        "description": "压缩质量",
+        "hint": "输出压缩质量，例如 100。",
+        "type": "int",
+        "default": 100
+      },
+      "num_images": {
+        "description": "图片数量",
+        "hint": "一次生成几张图片。",
+        "type": "int",
+        "default": 1
+      },
+      "edit_prompt_prefix": {
+        "description": "图生图前缀",
+        "hint": "自动加到图生图提示词前，用于降低短提示词误判风险。",
+        "type": "string",
+        "default": "Please edit the provided image according to the user's request. Keep the content safe and non-sensitive. User request: "
       },
       "timeout_seconds": {
-        "description": "图片生成超时时间，单位秒",
+        "description": "超时时间",
+        "hint": "图片生成请求超时时间，单位秒。",
         "type": "int",
         "default": 180
       }

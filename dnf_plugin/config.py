@@ -28,12 +28,24 @@ DEFAULT_CONFIG = {
     },
     "image_ai": {
         "enabled": False,
-        "endpoint": "",
-        "api_key": "",
-        "auth_header": "api-key",
+        "text_provider": "microsoft",
+        "edit_provider": "microsoft",
+        "microsoft_endpoint": "",
+        "microsoft_edit_endpoint": "",
+        "microsoft_api_key": "",
+        "microsoft_auth_header": "api-key",
+        "model": "",
         "size": "1024x1024",
-        "quality": "low",
-        "output_format": "png",
+        "quality": "medium",
+        "output_format": "jpeg",
+        "output_compression": 100,
+        "num_images": 1,
+        "edit_prompt_prefix": "Please edit the provided image according to the user's request. Keep the content safe and non-sensitive. User request: ",
+        "fal_text_endpoint": "",
+        "fal_edit_endpoint": "",
+        "fal_key": "",
+        "fal_poll_interval_seconds": 2,
+        "fal_timeout_seconds": 180,
         "timeout_seconds": 180,
     },
 }
@@ -56,6 +68,15 @@ class PluginConfig:
     def section(self, name: str) -> dict:
         value = self._config.get(name, {})
         return value if isinstance(value, dict) else {}
+
+    def set(self, path: str, value: Any) -> None:
+        current = self._config
+        parts = path.split(".")
+        for part in parts[:-1]:
+            if not isinstance(current.get(part), dict):
+                current[part] = {}
+            current = current[part]
+        current[parts[-1]] = value
 
     def _merge(self, target: dict, source: dict) -> None:
         for key, value in source.items():

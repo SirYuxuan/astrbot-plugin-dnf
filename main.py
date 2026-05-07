@@ -82,6 +82,31 @@ class DNF_Plugin(Star):
             return str(event.message_obj)
         return str(event)
 
+    def _parse_image_prompt(self, message: str, command: str) -> str:
+        prompt = message.split(command, 1)[1].strip() if command in message else ""
+        return prompt.replace("[图片]", "").strip()
+
+    async def _get_first_image_path(self, event) -> str | None:
+        messages = event.get_messages() if hasattr(event, "get_messages") else []
+        for component in messages:
+            component_type = str(getattr(component, "type", "")).lower()
+            if "image" not in component_type:
+                continue
+            for attr in ("url", "file"):
+                value = str(getattr(component, attr, "") or "")
+                if value.startswith(("http://", "https://")):
+                    return value
+            if hasattr(component, "convert_to_file_path"):
+                try:
+                    return await component.convert_to_file_path()
+                except Exception as e:
+                    logger.error(f"图片消息转换为本地文件失败: {e}")
+            for attr in ("path", "file", "url"):
+                value = getattr(component, attr, "")
+                if value:
+                    return str(value)
+        return None
+
     def _get_aiocqhttp_client(self):
         platform_name = self.config.get("platform.name", "aiocqhttp")
         for platform in self.context.platform_manager.get_insts():
@@ -287,11 +312,11 @@ class DNF_Plugin(Star):
         """使用配置的图片生成 API 生成图片，用法：画图 <提示词>"""
         try:
             message = self._get_message_text(event)
-            prompt = message.split("画图", 1)[1].strip() if "画图" in message else ""
+            prompt = self._parse_image_prompt(message, "画图")
             if not prompt:
                 yield event.plain_result("请输入图片描述，例如：画图 一张地下城冒险风格头像")
                 return
-            if not self.image_generator.is_ready():
+            if not self.image_generator.can_edit():
                 yield event.plain_result("图片生成功能未启用或配置不完整，请先在插件配置中填写 image_ai")
                 return
 
@@ -310,6 +335,59 @@ class DNF_Plugin(Star):
         except Exception as e:
             logger.error(f"画图命令异常: {e}")
             yield event.plain_result(f"画图出现异常：{e}")
+
+    @filter.command("生图")
+    async def set_image_quality(self, event):
+        """切换图片生成质量，用法：生图 1/2/3"""
+        try:
+            message = self._get_message_text(event)
+            match = re.search(r"生图\s+([123])(?:\s|$)", message)
+            if not match:
+                yield event.plain_result("请输入生图质量：生图 1=low，生图 2=medium，生图 3=high")
+                return
+
+            quality_map = {"1": "low", "2": "medium", "3": "high"}
+            quality = quality_map[match.group(1)]
+            self.config.set("image_ai.quality", quality)
+            self.image_generator.quality = quality
+            yield event.plain_result(f"已切换图片生成质量：{quality}")
+        except Exception as e:
+            logger.error(f"切换图片生成质量异常: {e}")
+            yield event.plain_result(f"切换图片生成质量出现异常：{e}")
+
+    @filter.regex(r"/?图生图")
+    async def edit_image(self, event):
+        """使用配置的图片生成 API 修改图片，用法：图生图 <图片> <提示词>"""
+        try:
+            message = self._get_message_text(event)
+            prompt = self._parse_image_prompt(message, "图生图")
+            if not prompt:
+                yield event.plain_result("请输入修改描述，例如：图生图 [图片] 改成地下城冒险风格头像")
+                return
+            if not self.image_generator.is_ready():
+                yield event.plain_result("图片生成功能未启用或配置不完整，请先在插件配置中填写 image_ai")
+                return
+
+            image_path = await self._get_first_image_path(event)
+            if not image_path:
+                yield event.plain_result("请在消息中附带一张图片，例如：图生图 [图片] 改成地下城冒险风格头像")
+                return
+
+            yield event.plain_result(f"正在根据图片生成，请稍候...\n提示词：{prompt}")
+            file_path, error = await asyncio.to_thread(self.image_generator.edit, image_path, prompt)
+            if error:
+                yield event.plain_result(f"图生图失败：{error}")
+                return
+
+            yield event.image_result(file_path)
+            if file_path:
+                try:
+                    os.unlink(file_path)
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.error(f"图生图命令异常: {e}")
+            yield event.plain_result(f"图生图出现异常：{e}")
 
     def _configured_oil_areas(self) -> list[str]:
         areas = self.config.get("oil.monitor_areas", ["河南"])

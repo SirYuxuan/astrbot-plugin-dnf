@@ -9,7 +9,7 @@
 - 按地区、油号、油耗和里程计算行驶成本
 - 查询蛋价，并支持每日群推送
 - 定时监控金币比例和油价变动
-- 可选启用 `/画图`，通过插件配置接入图片生成 API
+- 可选启用 `/画图` 和 `/图生图`，通过插件配置接入图片生成 API
 
 ## 指令
 
@@ -42,10 +42,37 @@
 
 ### 画图
 
-默认关闭。先在插件配置里启用 `image_ai.enabled`，并填写 `endpoint` 和 `api_key`。
+默认关闭。先在插件配置里启用 `image_ai.enabled`，再选择文生图和图生图服务：`microsoft` 或 `fal`。
+
+Azure AI Foundry v1 接口示例：
+
+```text
+microsoft_endpoint: https://yuxuan-ai-resource.services.ai.azure.com/openai/v1/images/generations
+microsoft_edit_endpoint: https://yuxuan-ai-resource.services.ai.azure.com/openai/v1/images/edits
+microsoft_api_key: 你的 Microsoft/Azure Key
+model: gpt-image-2
+microsoft_auth_header: Authorization
+```
+
+FAL 接口示例：
+
+```text
+text_provider: fal
+edit_provider: fal
+fal_text_endpoint: https://queue.fal.run/openai/gpt-image-2
+fal_edit_endpoint: https://queue.fal.run/openai/gpt-image-2/edit
+fal_key: 你的 FAL Key
+quality: medium
+size: 1024x1024
+output_format: jpeg
+```
 
 ```text
 /画图 一张地下城冒险风格头像
+/生图 1
+/生图 2
+/生图 3
+/图生图 [图片] 改成地下城冒险风格头像
 ```
 
 ## 插件配置
@@ -58,7 +85,7 @@
 - 金币比例监控开关、推送群号、检测间隔、波动阈值
 - 油价监控开关、推送群号、监控地区、每日检查时间、启动通知
 - 蛋价监控开关、推送群号、监控地区、检测间隔、展示条数
-- 图片生成 API 开关、接口地址、密钥、鉴权 Header、尺寸、质量、输出格式、超时时间
+- 图片生成 API 开关、文生图接口地址、微软图生图接口、FAL 图生图接口、模型、密钥、鉴权 Header、尺寸、质量、输出格式、压缩质量、超时时间
 
 ## 项目结构
 
