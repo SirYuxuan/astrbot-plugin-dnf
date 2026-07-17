@@ -3,6 +3,7 @@ import re
 
 from astrbot.api import logger
 from astrbot.api.event import filter
+from astrbot.api.message_components import Record
 from astrbot.api.star import Context, Star, register
 
 from .dnf_plugin.config import PluginConfig
@@ -11,6 +12,7 @@ from .dnf_plugin.features.gold import GoldFeature
 from .dnf_plugin.features.image_feature import ImageFeature
 from .dnf_plugin.features.oil import OilFeature
 from .dnf_plugin.image_utils import ImageGenerator
+from .dnf_plugin.music_utils import MusicGenerator
 from .dnf_plugin.storage_utils import JsonFileStore
 
 
@@ -26,6 +28,7 @@ class DNF_Plugin(Star):
         self.oil = OilFeature(cfg, store, context)
         self.egg = EggFeature(cfg, store, context)
         self.image = ImageFeature(ImageGenerator(cfg.section("image_ai")), cfg)
+        self.music = MusicGenerator(cfg.section("music_ai"))
 
     async def initialize(self) -> None:
         self.gold.start()
@@ -62,6 +65,38 @@ class DNF_Plugin(Star):
             yield event.plain_result("蛋价查询出现异常，请稍后重试")
 
     # ── 图片生成 ─────────────────────────────────────────────────────────────
+
+    @filter.command("写歌")
+    async def write_song(self, event):
+        """使用 FAL 生成音乐。用法：写歌 <创作需求>，可换行补充歌词。"""
+        audio_path = None
+        try:
+            content = self._msg(event).split("写歌", 1)[-1].strip()
+            prompt, _, lyrics = content.partition("\n")
+            if not prompt:
+                yield event.plain_result("请输入写歌需求，例如：写歌 温暖女声的中文民谣")
+                return
+            if not self.music.is_ready():
+                yield event.plain_result("写歌功能未启用或配置不完整，请先在插件配置中填写 music_ai")
+                return
+            yield event.plain_result(f"正在写歌，请稍候...\n风格：{prompt}")
+            audio_path, audio_url, error = await asyncio.to_thread(self.music.generate, prompt, lyrics.strip())
+            if error:
+                yield event.plain_result(f"写歌失败：{error}")
+                return
+            if audio_path:
+                yield event.chain_result([Record.fromFileSystem(audio_path)])
+            else:
+                yield event.plain_result(f"写歌完成：{audio_url}")
+        except Exception as e:
+            logger.error(f"写歌命令异常: {e}")
+            yield event.plain_result(f"写歌出现异常：{e}")
+        finally:
+            if audio_path:
+                try:
+                    os.unlink(audio_path)
+                except OSError:
+                    pass
 
     @filter.command("画图")
     async def draw_image(self, event):

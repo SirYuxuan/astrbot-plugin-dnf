@@ -10,6 +10,7 @@
 - 查询蛋价，并支持每日群推送
 - 定时监控金币比例和油价变动
 - 可选启用 `/画图` 和 `/图生图`，通过插件配置接入图片生成 API
+- 可选启用 `/写歌`，通过 FAL minimax-music 生成并发送音频
 
 ## 指令
 
@@ -75,6 +76,29 @@ output_format: jpeg
 /图生图 [图片] 改成地下城冒险风格头像
 ```
 
+### 写歌
+
+默认关闭。先在插件配置里启用 `music_ai.enabled`，并填写 FAL Key。
+
+```text
+endpoint: https://queue.fal.run/fal-ai/minimax-music/v2.6
+api_key: 你的 FAL Key
+```
+
+```text
+/写歌 中文民谣，融合 City Pop 与 80 年代复古氛围，温暖女声，主题是怀念远去的爱情
+```
+
+也可以把歌词放在第二行开始：
+
+```text
+/写歌 City Pop, 80s retro, warm female vocal
+[verse]
+Streetlights flicker
+[chorus]
+Wandering
+```
+
 ## 插件配置
 
 项目提供 `_conf_schema.json`，AstrBot 会在 WebUI 中生成可视化配置项。
@@ -86,6 +110,7 @@ output_format: jpeg
 - 油价监控开关、推送群号、监控地区、每日检查时间、启动通知
 - 蛋价监控开关、推送群号、监控地区、检测间隔、展示条数
 - 图片生成 API 开关、文生图接口地址、微软图生图接口、FAL 图生图接口、模型、密钥、鉴权 Header、尺寸、质量、输出格式、压缩质量、超时时间
+- 音乐生成开关、FAL 音乐接口、FAL Key、超时时间、轮询间隔
 
 ## 项目结构
 
@@ -98,6 +123,7 @@ output_format: jpeg
 │   ├── dnf_utils.py     # DNF 金币比例查询
 │   ├── egg_utils.py     # 蛋价查询、解析和格式化
 │   ├── image_utils.py   # 可配置图片生成客户端
+│   ├── music_utils.py   # 可配置音乐生成客户端
 │   ├── oil_utils.py     # 油价查询、格式化和成本计算
 │   └── storage_utils.py # JSON 状态文件读写
 ├── metadata.yaml        # AstrBot 插件元信息

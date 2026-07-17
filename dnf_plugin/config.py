@@ -48,6 +48,13 @@ DEFAULT_CONFIG = {
         "fal_timeout_seconds": 180,
         "timeout_seconds": 180,
     },
+    "music_ai": {
+        "enabled": False,
+        "endpoint": "https://queue.fal.run/fal-ai/minimax-music/v2.6",
+        "api_key": "",
+        "timeout_seconds": 180,
+        "poll_interval_seconds": 2,
+    },
 }
 
 

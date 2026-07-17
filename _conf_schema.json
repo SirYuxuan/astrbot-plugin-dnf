@@ -245,5 +245,43 @@
         "default": 180
       }
     }
+  },
+  "music_ai": {
+    "description": "音乐生成",
+    "hint": "使用 FAL minimax-music 生成歌曲。",
+    "type": "object",
+    "items": {
+      "enabled": {
+        "description": "启用写歌",
+        "hint": "是否启用 /写歌 命令。",
+        "type": "bool",
+        "default": false
+      },
+      "endpoint": {
+        "description": "FAL 音乐接口",
+        "hint": "例如 https://queue.fal.run/fal-ai/minimax-music/v2.6。",
+        "type": "string",
+        "default": "https://queue.fal.run/fal-ai/minimax-music/v2.6"
+      },
+      "api_key": {
+        "description": "FAL Key",
+        "hint": "FAL 音乐接口密钥。",
+        "type": "string",
+        "default": "",
+        "obvious_hint": true
+      },
+      "timeout_seconds": {
+        "description": "超时时间",
+        "hint": "等待写歌任务完成的最长时间，单位秒。",
+        "type": "int",
+        "default": 180
+      },
+      "poll_interval_seconds": {
+        "description": "轮询间隔",
+        "hint": "查询写歌任务状态的间隔，单位秒。",
+        "type": "int",
+        "default": 2
+      }
+    }
   }
 }
