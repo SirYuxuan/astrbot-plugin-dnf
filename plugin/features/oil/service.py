@@ -1,53 +1,45 @@
 import asyncio
 import datetime
+import logging
 import re
 
-from astrbot.api import logger
-
-from ..oil_utils import (
+from ...core.feature import MonitorFeature
+from .client import (
     calculate_oil_cost,
     fetch_oil_data,
     format_oil_info,
     get_oil_price_by_type,
     has_oil_price_changed,
 )
-from .base import FeatureBase
+
+logger = logging.getLogger(__name__)
 
 
-class OilFeature(FeatureBase):
-    def __init__(self, config, store, context) -> None:
-        super().__init__(config, store, context)
-        self._task: asyncio.Task | None = None
+class OilFeature(MonitorFeature):
+    name = "oil"
+
+    def __init__(self, config, store, notifier) -> None:
+        super().__init__(config, store, notifier)
         raw = self.store.load("last_oil_data.json", {})
         self.last_oil_data: dict = raw if isinstance(raw, dict) else {}
 
-    def start(self) -> None:
-        if self.config.get("oil.monitor_enabled", True):
-            self._task = asyncio.create_task(self._loop())
-
-    async def stop(self) -> None:
-        if self._task:
-            self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
-            self._task = None
-
     async def query(self, message: str) -> str:
-        calc_match = re.search(r"油价\s+([^\s]+)\s+(\d+)\s+([\d.]+)(?:\s+(\d+))?", message)
+        message = message.strip()
+        calc_match = re.fullmatch(r"/?油价\s+(\S+)\s+(\d+)\s+(\d+(?:\.\d+)?)(?:\s+(\d+))?", message)
         if calc_match:
             area = calc_match.group(1)
             oil_type = calc_match.group(2)
             consumption = float(calc_match.group(3))
             distance = int(calc_match.group(4)) if calc_match.group(4) else 100
+            if consumption <= 0 or distance <= 0:
+                return "❌ 油耗和里程必须大于 0"
             oil_data = await asyncio.to_thread(fetch_oil_data, area)
             oil_price = get_oil_price_by_type(oil_data or {}, oil_type)
             if oil_price is None:
                 return f"❌ 无法获取{area}地区{oil_type}号油的价格信息"
             return calculate_oil_cost(oil_type, oil_price, consumption, distance, area)
 
-        area_match = re.search(r"油价\s+([^\s\d]+)$", message)
+        area_match = re.fullmatch(r"/?油价\s+([^\s\d]+)", message)
         if area_match:
             area = area_match.group(1).strip()
             oil_data = await asyncio.to_thread(fetch_oil_data, area)
@@ -69,7 +61,7 @@ class OilFeature(FeatureBase):
             return ["河南"]
         return [str(a).strip() for a in areas if str(a).strip()]
 
-    async def _loop(self) -> None:
+    async def run(self) -> None:
         await asyncio.sleep(2)
         if self.config.get("oil.startup_notice_enabled", True):
             try:
@@ -92,34 +84,22 @@ class OilFeature(FeatureBase):
                 await asyncio.sleep(60)
 
     async def _send_startup_notice(self) -> None:
-        client = self._get_aiocqhttp_client()
-        infos = []
-        for area in self._configured_areas():
-            oil = await asyncio.to_thread(fetch_oil_data, area)
-            if oil:
-                infos.append(format_oil_info(oil))
-                self.last_oil_data[area] = oil
-        if infos and client:
-            await client.send_group_msg(
-                group_id=int(self.config.get("oil.notify_group_id", 101344113)),
-                message="油价更新通知：\n\n" + "\n".join(infos),
-            )
-        self.store.save("last_oil_data.json", self.last_oil_data)
+        await self._collect_and_notify(only_changes=False)
 
     async def _check_and_send_changes(self) -> None:
-        client = self._get_aiocqhttp_client()
-        changed_infos = []
+        await self._collect_and_notify(only_changes=True)
+
+    async def _collect_and_notify(self, *, only_changes: bool) -> None:
+        next_data = dict(self.last_oil_data)
+        infos = []
         for area in self._configured_areas():
             oil = await asyncio.to_thread(fetch_oil_data, area)
             if not oil:
                 continue
-            if has_oil_price_changed(self.last_oil_data.get(area), oil):
-                changed_infos.append(format_oil_info(oil))
-                self.last_oil_data[area] = oil
-        if changed_infos and client:
-            await client.send_group_msg(
-                group_id=int(self.config.get("oil.notify_group_id", 101344113)),
-                message="油价更新通知：\n\n" + "\n".join(changed_infos),
-            )
-        if changed_infos:
-            self.store.save("last_oil_data.json", self.last_oil_data)
+            if not only_changes or has_oil_price_changed(self.last_oil_data.get(area), oil):
+                infos.append(format_oil_info(oil))
+                next_data[area] = oil
+        # 平台未连接或发送失败时不推进快照，下次仍然能够检测到变化。
+        if infos and await self.notify("油价更新通知：\n\n" + "\n".join(infos)):
+            self.store.save("last_oil_data.json", next_data)
+            self.last_oil_data = next_data

@@ -1,6 +1,8 @@
+import logging
+
 import requests
 
-from astrbot.api import logger
+logger = logging.getLogger(__name__)
 
 
 OIL_API_URL = "https://www.iamwawa.cn/oilprice/api"
@@ -14,6 +16,10 @@ def fetch_oil_data(area: str) -> dict | None:
         data = response.json()
     except Exception as e:
         logger.error(f"获取{area}地区油价异常: {e}")
+        return None
+
+    if not isinstance(data, dict):
+        logger.warning("油价接口返回的不是对象")
         return None
 
     if data.get("status") == 1 and isinstance(data.get("data"), dict):
@@ -68,6 +74,8 @@ def calculate_oil_cost(
     distance: int,
     area: str = "",
 ) -> str:
+    if distance <= 0 or consumption <= 0:
+        return "❌ 油耗和里程必须大于 0"
     consumption_per_km = consumption / 100
     total_consumption = consumption_per_km * distance
     total_cost = total_consumption * oil_price

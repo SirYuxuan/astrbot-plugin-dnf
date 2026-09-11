@@ -1,0 +1,1 @@
+"""plugin.features.egg package."""

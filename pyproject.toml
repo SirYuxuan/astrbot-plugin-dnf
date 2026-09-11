@@ -1,0 +1,16 @@
+[project]
+name = "astrbot-plugin-dnf"
+version = "1.5.0"
+description = "AstrBot 基础查询插件：DNF 金币比例、油价、蛋价"
+requires-python = ">=3.10"
+dependencies = ["requests"]
+
+[dependency-groups]
+dev = ["ruff"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]

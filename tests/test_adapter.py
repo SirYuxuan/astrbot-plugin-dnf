@@ -1,0 +1,89 @@
+"""使用最小框架替身验证入口，不需要安装或启动 AstrBot。"""
+
+import importlib
+import importlib.util
+import logging
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from types import ModuleType, SimpleNamespace
+from unittest.mock import AsyncMock, patch
+
+from plugin.adapters.astrbot.notifications import AstrBotGroupNotifier
+from plugin.core.config import PluginConfig
+
+
+class AdapterTests(unittest.IsolatedAsyncioTestCase):
+    async def test_notifier_resolves_configured_platform(self):
+        client = SimpleNamespace(send_group_msg=AsyncMock())
+        platform = SimpleNamespace(
+            meta=lambda: SimpleNamespace(name="aiocqhttp"), get_client=lambda: client
+        )
+        context = SimpleNamespace(platform_manager=SimpleNamespace(get_insts=lambda: [platform]))
+        notifier = AstrBotGroupNotifier(context, PluginConfig())
+        self.assertTrue(await notifier.send_group(123, "测试"))
+        client.send_group_msg.assert_awaited_once_with(group_id=123, message="测试")
+        missing = AstrBotGroupNotifier(context, PluginConfig({"platform": {"name": "missing"}}))
+        self.assertFalse(await missing.send_group(123, "测试"))
+
+    async def test_entrypoint_commands_and_lifecycle(self):
+        with tempfile.TemporaryDirectory() as directory:
+            modules = {
+                name: ModuleType(name)
+                for name in ("astrbot", "astrbot.api", "astrbot.api.event", "astrbot.api.star")
+            }
+            modules["astrbot.api"].logger = logging.getLogger("test.astrbot")
+            commands = []
+
+            def command(name):
+                commands.append(name)
+                return lambda function: function
+
+            class Star:
+                def __init__(self, context):
+                    self.context = context
+
+            modules["astrbot.api.event"].filter = SimpleNamespace(command=command)
+            star_module = modules["astrbot.api.star"]
+            star_module.Context = object
+            star_module.Star = Star
+            star_module.StarTools = SimpleNamespace(get_data_dir=lambda name: Path(directory))
+            star_module.register = lambda *args: lambda cls: cls
+            root = Path(__file__).parents[1]
+            package_name = "_test_plugin_entry"
+            spec = importlib.util.spec_from_file_location(
+                package_name, root / "__init__.py", submodule_search_locations=[str(root)]
+            )
+            package = importlib.util.module_from_spec(spec)
+            modules[package_name] = package
+            try:
+                with patch.dict(sys.modules, modules):
+                    module = importlib.import_module(f"{package_name}.main")
+                    plugin = module.DNF_Plugin(
+                        SimpleNamespace(),
+                        {name: {"monitor_enabled": False} for name in ("gold", "oil", "egg")},
+                    )
+                    self.assertEqual(commands, ["金币比例", "油价", "蛋价"])
+                    await plugin.initialize()
+                    await plugin.initialize()
+                    for method, feature in (
+                        (plugin.dnf_gold_ratio, plugin.app.gold),
+                        (plugin.oil_price, plugin.app.oil),
+                        (plugin.egg_price, plugin.app.egg),
+                    ):
+                        feature.query = AsyncMock(return_value="查询结果")
+                        event = SimpleNamespace(
+                            message_str="油价 河南", plain_result=lambda text: text
+                        )
+                        self.assertEqual([item async for item in method(event)], ["查询结果"])
+                    plugin.app.gold.query.side_effect = RuntimeError("private details")
+                    with self.assertLogs("test.astrbot", level="ERROR"):
+                        result = [item async for item in plugin.dnf_gold_ratio(event)]
+                    self.assertEqual(result, ["金币比例查询出现异常，请稍后重试"])
+                    await plugin.terminate()
+                    await plugin.terminate()
+            finally:
+                for name in list(sys.modules):
+                    if name.startswith(package_name + "."):
+                        sys.modules.pop(name, None)

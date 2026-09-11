@@ -1,1 +1,1 @@
-"""AstrBot DNF plugin package."""
+"""雨轩基础查询插件。"""

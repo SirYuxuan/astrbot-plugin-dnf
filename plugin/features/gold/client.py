@@ -52,7 +52,7 @@ class DnfGoldRatioFetcher:
                         amount_str = str(int(amount_value))
                     else:
                         # 去掉不必要的尾随 0
-                        amount_str = ("%f" % amount_value).rstrip('0').rstrip('.')
+                        amount_str = ("%f" % amount_value).rstrip("0").rstrip(".")
                 except Exception:
                     amount_str = str(amount_field)
                 unit = it.get("unit") or ""

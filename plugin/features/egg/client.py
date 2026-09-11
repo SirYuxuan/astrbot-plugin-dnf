@@ -1,10 +1,11 @@
 import datetime
+import logging
 import re
 import time
 
 import requests
 
-from astrbot.api import logger
+logger = logging.getLogger(__name__)
 
 
 EGG_API_URL = "http://www.quotn.cn/e/search"
@@ -52,7 +53,9 @@ def fetch_egg_prices(area_name: str, date_str: str) -> list[dict]:
     if results:
         return results
 
-    pattern = re.compile(r"([\u4e00-\u9fff\w\-\s\/（）()]{2,60}?)\s*[：:\-\s]{0,3}\s*([0-9]+(?:\.[0-9]+)?)\s*(?:元|元/斤|元/公斤)")
+    pattern = re.compile(
+        r"([\u4e00-\u9fff\w\-\s\/（）()]{2,60}?)\s*[：:\-\s]{0,3}\s*([0-9]+(?:\.[0-9]+)?)\s*(?:元|元/斤|元/公斤)"
+    )
     for title, price_s in pattern.findall(resp.text):
         try:
             price = float(price_s)
@@ -76,7 +79,9 @@ def format_egg_prices(area: str, date_str: str | None = None, limit: int = 10) -
     return format_egg_items(today_items, yesterday_items, query_date, limit)
 
 
-def format_egg_items(today_items: list[dict], yesterday_items: list[dict], query_date: datetime.date, limit: int = 10) -> str:
+def format_egg_items(
+    today_items: list[dict], yesterday_items: list[dict], query_date: datetime.date, limit: int = 10
+) -> str:
     lines = [f"返回查询结果（{query_date.strftime('%Y-%m-%d')}前{limit}条）："]
     if not today_items:
         lines.append("未查询到蛋价数据")
@@ -105,7 +110,11 @@ def format_egg_items(today_items: list[dict], yesterday_items: list[dict], query
         if count > limit:
             break
 
-        price_text = f"{price:.2f}元" if isinstance(price, (int, float)) else (str(price) if price is not None else "-")
+        price_text = (
+            f"{price:.2f}元"
+            if isinstance(price, (int, float))
+            else (str(price) if price is not None else "-")
+        )
         change = _format_price_change(price, y_price)
         if up_time:
             lines.append(f"{count} .{title} {up_time} {price_text}({change})")
@@ -135,10 +144,18 @@ def _parse_egg_json(data: object) -> list[dict]:
 def _parse_data_list_item(item: dict) -> dict:
     c_name = item.get("cName") or ""
     a_name = item.get("aName") or ""
-    title = f"{c_name}{a_name}" if (c_name or a_name) else (item.get("aName") or item.get("name") or "")
+    title = (
+        f"{c_name}{a_name}" if (c_name or a_name) else (item.get("aName") or item.get("name") or "")
+    )
     return {
         "title": title.strip(),
-        "price": _extract_float(item.get("tPrice") or item.get("price") or item.get("priceText") or item.get("金额") or item.get("yPrice")),
+        "price": _extract_float(
+            item.get("tPrice")
+            or item.get("price")
+            or item.get("priceText")
+            or item.get("金额")
+            or item.get("yPrice")
+        ),
         "upTime": item.get("upTime") or None,
         "cName": c_name,
         "aName": a_name,
@@ -152,7 +169,9 @@ def _collect_price_items(obj: object, results: list[dict]) -> None:
             if key in obj:
                 results.append(
                     {
-                        "title": (obj.get("title") or obj.get("name") or obj.get("标题") or "").strip(),
+                        "title": (
+                            obj.get("title") or obj.get("name") or obj.get("标题") or ""
+                        ).strip(),
                         "price": _extract_float(obj.get(key)),
                         "utime": _format_time(obj),
                     }

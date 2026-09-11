@@ -1,0 +1,1 @@
+"""plugin.adapters.astrbot package."""
