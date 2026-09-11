@@ -1,5 +1,5 @@
 name: yuxuandnf # 这是你的插件的唯一识别名。
-desc: 雨轩基础查询插件，支持金币比例、油价和蛋价查询。 # 插件简短描述
-version: v1.5 # 插件版本号。格式：v1.1.1 或者 v1.1
+desc: 雨轩查询插件，支持金币比例、油价、蛋价和 EVE 吉他市场查询。 # 插件简短描述
+version: v1.6 # 插件版本号。格式：v1.1.1 或者 v1.1
 author: Sir 丶雨轩 # 作者
 repo: https://github.com/SirYuxuan/astrbot_plugin_dnf # 插件的仓库地址

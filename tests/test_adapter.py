@@ -36,7 +36,7 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
             modules["astrbot.api"].logger = logging.getLogger("test.astrbot")
             commands = []
 
-            def command(name):
+            def command(name, **kwargs):
                 commands.append(name)
                 return lambda function: function
 
@@ -64,7 +64,7 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
                         SimpleNamespace(),
                         {name: {"monitor_enabled": False} for name in ("gold", "oil", "egg")},
                     )
-                    self.assertEqual(commands, ["金币比例", "油价", "蛋价"])
+                    self.assertEqual(commands, ["金币比例", "油价", "蛋价", "jita"])
                     await plugin.initialize()
                     await plugin.initialize()
                     for method, feature in (
@@ -81,6 +81,16 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
                     with self.assertLogs("test.astrbot", level="ERROR"):
                         result = [item async for item in plugin.dnf_gold_ratio(event)]
                     self.assertEqual(result, ["金币比例查询出现异常，请稍后重试"])
+                    plugin.app.eve.handle = AsyncMock(return_value="EVE 查询结果")
+                    event.message_str = "/jt PLEX * 500"
+                    event.role = "admin"
+                    event.sender = SimpleNamespace(user_id="42")
+                    self.assertEqual(
+                        [item async for item in plugin.eve_market(event)], ["EVE 查询结果"]
+                    )
+                    plugin.app.eve.handle.assert_awaited_once_with(
+                        "/jt PLEX * 500", is_admin=True, actor="42"
+                    )
                     await plugin.terminate()
                     await plugin.terminate()
             finally:

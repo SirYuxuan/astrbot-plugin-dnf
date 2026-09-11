@@ -57,6 +57,9 @@ core 不依赖 AstrBot 或任何具体功能
 4. 在 `main.py` 添加对应 AstrBot 命令，通过 `query_result` 包装结果和异常回复。
 5. 为查询、数据缺失、通知失败、状态提交及生命周期添加离线测试。
 
+EVE 功能是纯查询模块，不加入 `FeatureRuntime`。它在 `plugin/features/eve/` 内部分为名称目录、
+SDE 更新、ESI 行情/Redis 缓存和命令业务四个模块，通过 `PluginApplication` 显式装配。
+
 扩展到另一类推送平台时优先替换或扩展 `adapters/astrbot/notifications.py`，
 不要在每个功能中复制平台识别代码。架构解耦不代表已实现跨平台推送。
 

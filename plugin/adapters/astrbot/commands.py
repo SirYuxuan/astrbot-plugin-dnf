@@ -13,9 +13,21 @@ def message_text(event) -> str:
     return str(getter() if callable(getter) else event).strip()
 
 
-async def query_result(event, label: str, query: Callable[..., Awaitable[str]], *args):
+def is_admin_event(event) -> bool:
+    role = getattr(event, "role", "")
+    return str(getattr(role, "value", role)).casefold() == "admin"
+
+
+def actor_id(event) -> str:
+    sender = getattr(event, "sender", None)
+    sender_id = getattr(sender, "user_id", "")
+    getter = getattr(event, "get_sender_id", None)
+    return str(sender_id or (getter() if callable(getter) else ""))
+
+
+async def query_result(event, label: str, query: Callable[..., Awaitable[str]], *args, **kwargs):
     try:
-        text = await query(*args)
+        text = await query(*args, **kwargs)
     except Exception:
         logger.exception("%s查询异常", label)
         text = f"{label}查询出现异常，请稍后重试"

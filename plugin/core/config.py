@@ -25,6 +25,16 @@ DEFAULT_CONFIG = {
         "interval_seconds": 3600,
         "daily_limit": 10,
     },
+    "eve": {
+        "search_result_limit": 5,
+        "request_timeout_seconds": 30,
+        "sde_timeout_seconds": 300,
+        "cache_seconds": 300,
+        "cache_stale_seconds": 3600,
+        "redis_url": "redis://localhost:6379/0",
+        "redis_prefix": "yuxuandnf:eve",
+        "user_agent": "astrbot-plugin-dnf/1.6 (+https://github.com/SirYuxuan/astrbot-plugin-dnf)",
+    },
 }
 
 

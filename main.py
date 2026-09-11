@@ -5,7 +5,7 @@ from pathlib import Path
 from astrbot.api.event import filter
 from astrbot.api.star import Context, Star, StarTools, register
 
-from .plugin.adapters.astrbot.commands import message_text, query_result
+from .plugin.adapters.astrbot.commands import actor_id, is_admin_event, message_text, query_result
 from .plugin.adapters.astrbot.notifications import AstrBotGroupNotifier
 from .plugin.application import PluginApplication
 from .plugin.core.config import PluginConfig
@@ -13,7 +13,10 @@ from .plugin.core.storage import JsonFileStore
 
 
 @register(
-    "yuxuandnf", "Sir 丶雨轩", "雨轩基础查询插件，支持 DNF 金币比例、油价和蛋价查询。", "v1.5"
+    "yuxuandnf",
+    "Sir 丶雨轩",
+    "雨轩查询插件，支持 DNF 金币比例、油价、蛋价和 EVE 吉他市场查询。",
+    "v1.6",
 )
 class DNF_Plugin(Star):
     """保留历史插件标识及入口类名，兼容已有安装。"""
@@ -44,6 +47,18 @@ class DNF_Plugin(Star):
     async def egg_price(self, event):
         """查询蛋价：蛋价 平舆 / 蛋价 平舆 20260911。"""
         yield await query_result(event, "蛋价", self.app.egg.query, message_text(event))
+
+    @filter.command("jita", alias={"jt"})
+    async def eve_market(self, event):
+        """查询 EVE Tranquility 吉他市场；jt 为同义命令。"""
+        yield await query_result(
+            event,
+            "EVE 市场",
+            self.app.eve.handle,
+            message_text(event),
+            is_admin=is_admin_event(event),
+            actor=actor_id(event),
+        )
 
     async def terminate(self) -> None:
         await self.app.runtime.stop()

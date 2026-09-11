@@ -118,5 +118,61 @@
         "default": 10
       }
     }
+  },
+  "eve": {
+    "description": "EVE 欧服吉他查价",
+    "hint": "名称库、CCP ESI 请求和 Redis 共享缓存配置。",
+    "type": "object",
+    "items": {
+      "search_result_limit": {
+        "description": "候选结果数量",
+        "hint": "名称模糊查询最多显示多少个候选，范围 1-20。",
+        "type": "int",
+        "default": 5
+      },
+      "request_timeout_seconds": {
+        "description": "行情请求超时",
+        "hint": "CCP ESI 单次请求超时秒数。",
+        "type": "int",
+        "default": 30
+      },
+      "sde_timeout_seconds": {
+        "description": "名称库更新超时",
+        "hint": "下载 CCP SDE 压缩包的超时秒数。",
+        "type": "int",
+        "default": 300
+      },
+      "cache_seconds": {
+        "description": "行情缓存时间",
+        "hint": "ESI 未返回有效 Expires 时使用的缓存秒数。",
+        "type": "int",
+        "default": 300
+      },
+      "cache_stale_seconds": {
+        "description": "Redis 保留时间",
+        "hint": "行情分页数据在 Redis 中的最长保留秒数。",
+        "type": "int",
+        "default": 3600
+      },
+      "redis_url": {
+        "description": "Redis 地址",
+        "hint": "例如 redis://localhost:6379/0；留空时仅使用进程内缓存。",
+        "type": "string",
+        "default": "redis://localhost:6379/0",
+        "obvious_hint": true
+      },
+      "redis_prefix": {
+        "description": "Redis Key 前缀",
+        "hint": "多个部署共用 Redis 时用于隔离缓存。",
+        "type": "string",
+        "default": "yuxuandnf:eve"
+      },
+      "user_agent": {
+        "description": "ESI User-Agent",
+        "hint": "CCP 建议包含应用名、版本和项目地址。",
+        "type": "string",
+        "default": "astrbot-plugin-dnf/1.6 (+https://github.com/SirYuxuan/astrbot-plugin-dnf)"
+      }
+    }
   }
 }
