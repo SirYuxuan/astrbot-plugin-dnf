@@ -5,7 +5,13 @@ from pathlib import Path
 from astrbot.api.event import filter
 from astrbot.api.star import Context, Star, StarTools, register
 
-from .plugin.adapters.astrbot.commands import actor_id, is_admin_event, message_text, query_result
+from .plugin.adapters.astrbot.commands import (
+    actor_id,
+    eve_query_results,
+    is_admin_event,
+    message_text,
+    query_result,
+)
 from .plugin.adapters.astrbot.notifications import AstrBotGroupNotifier
 from .plugin.application import PluginApplication
 from .plugin.core.config import PluginConfig
@@ -51,14 +57,16 @@ class DNF_Plugin(Star):
     @filter.command("jita", alias={"jt"})
     async def eve_market(self, event):
         """查询 EVE Tranquility 吉他市场；jt 为同义命令。"""
-        yield await query_result(
+        results = await eve_query_results(
             event,
-            "EVE 市场",
-            self.app.eve.handle,
+            self.app.eve.handle_reply,
             message_text(event),
+            html_renderer=self.html_render,
             is_admin=is_admin_event(event),
             actor=actor_id(event),
         )
+        for result in results:
+            yield result
 
     async def terminate(self) -> None:
         await self.app.runtime.stop()

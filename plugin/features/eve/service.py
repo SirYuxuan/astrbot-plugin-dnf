@@ -1,25 +1,38 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
+from dataclasses import dataclass
 
 from .catalog import EveCatalog, EveType, normalize_name
-from .client import PLEX_TYPE_ID, EsiMarketClient, MarketQuote
+from .chart import PriceChartRenderer
+from .client import PLEX_TYPE_ID, MarketClient, MarketQuote
 from .sde import SdeUpdater
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class EveReply:
+    text: str
+    chart_html: str | None = None
 
 
 class EveFeature:
     def __init__(
         self,
         catalog: EveCatalog,
-        market: EsiMarketClient,
+        market: MarketClient,
         updater: SdeUpdater,
         search_result_limit: int = 5,
+        chart_renderer: PriceChartRenderer | None = None,
     ):
         self.catalog = catalog
         self.market = market
         self.updater = updater
         self.search_result_limit = min(20, max(1, search_result_limit))
+        self.chart_renderer = chart_renderer
         self._update_lock = asyncio.Lock()
 
     async def handle(self, message: str, *, is_admin: bool = False, actor: str = "") -> str:
@@ -34,13 +47,100 @@ class EveFeature:
             return await self._data(command[3:].strip(), is_admin)
         return await self.query(command)
 
+    async def handle_reply(
+        self, message: str, *, is_admin: bool = False, actor: str = ""
+    ) -> EveReply:
+        text = await self.handle(message, is_admin=is_admin, actor=actor)
+        if self.chart_renderer is None:
+            return EveReply(text)
+        command = self._item_command(message)
+        if command is None:
+            return EveReply(text)
+        resolved = await self._resolve_single(command)
+        if resolved is None:
+            return EveReply(text)
+        item, market, quantity = resolved
+        try:
+            history = await asyncio.to_thread(self.market.history, item.type_id, market, 30)
+            chart = await asyncio.to_thread(
+                self.chart_renderer.render,
+                item.type_id,
+                self._localized_name(item, self._prefers_chinese(command)),
+                history,
+                quantity=quantity,
+            )
+            chart_html = chart.html if chart else None
+        except Exception:
+            # 历史行情或绘图失败不能影响当前价格回复。
+            logger.exception("生成 EVE 价格走势图失败: type_id=%s", item.type_id)
+            chart_html = None
+        return EveReply(text, chart_html)
+
+    @staticmethod
+    def _item_command(message: str) -> str | None:
+        command = re.sub(r"^/?(?:jita|jt)(?:\s+|$)", "", message.strip(), count=1).strip()
+        if (
+            not command
+            or command in {"帮助", "help"}
+            or command.startswith(("搜索 ", "别名 ", "数据 "))
+            or re.fullmatch(r".+?\s*(?:\*|×|[xX])\s*\d+\s*", command)
+        ):
+            return None
+        return command
+
+    async def _resolve_single(self, query: str) -> tuple[EveType, str, int] | None:
+        normalized = normalize_name(query)
+        if normalized in {"plex", "伊甸币"}:
+            return EveType(PLEX_TYPE_ID, "PLEX", "伊甸币"), "global", 500
+        if query.isdigit():
+            item = await asyncio.to_thread(self.catalog.get_type, int(query))
+            if item is None or not self._is_tradeable(item):
+                return None
+            return (
+                item,
+                "global" if item.type_id == PLEX_TYPE_ID else "jita",
+                (500 if item.type_id == PLEX_TYPE_ID else 1),
+            )
+        alias = await asyncio.to_thread(self.catalog.alias, query)
+        if alias:
+            return (
+                alias,
+                "global" if alias.type_id == PLEX_TYPE_ID else "jita",
+                (500 if alias.type_id == PLEX_TYPE_ID else 1),
+            )
+        blueprint = self._asks_for_blueprint(query)
+        official = await asyncio.to_thread(
+            self.catalog.official_exact, query, include_unmarketable=blueprint
+        )
+        if official:
+            return (
+                official,
+                "global" if official.type_id == PLEX_TYPE_ID else "jita",
+                (500 if official.type_id == PLEX_TYPE_ID else 1),
+            )
+        candidates = await asyncio.to_thread(
+            self.catalog.search,
+            query,
+            self.search_result_limit + 1,
+            include_blueprints=blueprint,
+            include_skins=self._asks_for_skin(query),
+        )
+        if len(candidates) != 1:
+            return None
+        item = candidates[0]
+        return (
+            item,
+            "global" if item.type_id == PLEX_TYPE_ID else "jita",
+            (500 if item.type_id == PLEX_TYPE_ID else 1),
+        )
+
     async def query(self, query: str) -> str:
         item_query = query.strip()
         if re.fullmatch(r".+?\s*(?:\*|×|[xX])\s*\d+\s*", item_query):
             return "当前只查询物品单价，请去掉数量，例如：/jt 毒蜥级"
         if normalize_name(item_query) in {"plex", "伊甸币"}:
             item = EveType(PLEX_TYPE_ID, "PLEX", "伊甸币")
-            return await self._quote(item, "global")
+            return await self._quote(item, "global", query=item_query, quantity=500)
         if item_query.isdigit():
             item = await asyncio.to_thread(self.catalog.get_type, int(item_query))
             if item is None:
@@ -54,10 +154,20 @@ class EveFeature:
                     return f"未找到物品 ID {item_query}，或该 ID 不在当前名称库中。"
             if not self._is_tradeable(item):
                 return f"物品 {item.display_name}（{item.type_id}）未发布或不可在市场交易。"
-            return await self._quote(item, "global" if item.type_id == PLEX_TYPE_ID else "jita")
+            return await self._quote(
+                item,
+                "global" if item.type_id == PLEX_TYPE_ID else "jita",
+                query=item_query,
+                quantity=500 if item.type_id == PLEX_TYPE_ID else 1,
+            )
         alias = await asyncio.to_thread(self.catalog.alias, item_query)
         if alias:
-            return await self._quote(alias, "global" if alias.type_id == PLEX_TYPE_ID else "jita")
+            return await self._quote(
+                alias,
+                "global" if alias.type_id == PLEX_TYPE_ID else "jita",
+                query=item_query,
+                quantity=500 if alias.type_id == PLEX_TYPE_ID else 1,
+            )
         asks_for_blueprint = self._asks_for_blueprint(item_query)
         asks_for_skin = self._asks_for_skin(item_query)
         official = await asyncio.to_thread(
@@ -65,6 +175,13 @@ class EveFeature:
             item_query,
             include_unmarketable=asks_for_blueprint,
         )
+        if official:
+            return await self._quote(
+                official,
+                "global" if official.type_id == PLEX_TYPE_ID else "jita",
+                query=item_query,
+                quantity=500 if official.type_id == PLEX_TYPE_ID else 1,
+            )
         candidates = await asyncio.to_thread(
             self.catalog.search,
             item_query,
@@ -77,11 +194,7 @@ class EveFeature:
             if not status["count"]:
                 return "EVE 名称库尚未初始化，请管理员执行：/jt 数据 更新"
             return f"没有找到“{item_query}”，可尝试输入更完整的中英文名称或物品 ID。"
-        if official and len(candidates) == 1 and candidates[0].type_id == official.type_id:
-            return await self._quote(
-                official, "global" if official.type_id == PLEX_TYPE_ID else "jita"
-            )
-        return self._candidate_text(item_query, candidates[: self.search_result_limit])
+        return await self._quotes(candidates[: self.search_result_limit], item_query)
 
     @staticmethod
     def _asks_for_blueprint(query: str) -> bool:
@@ -100,9 +213,41 @@ class EveFeature:
             item.published and item.market_group_id is not None
         )
 
-    async def _quote(self, item: EveType, market: str) -> str:
+    async def _quote(
+        self, item: EveType, market: str, *, query: str = "", quantity: int = 1
+    ) -> str:
         quote = await asyncio.to_thread(self.market.quote, item.type_id, market)
-        return self._format_quote(item, quote)
+        return self._format_quote(
+            item,
+            quote,
+            prefer_chinese=self._prefers_chinese(query),
+            quantity=quantity,
+        )
+
+    async def _quotes(self, items: list[EveType], query: str) -> str:
+        """并发查询模糊匹配结果，避免逐项等待 ESI。"""
+        results = await asyncio.gather(
+            *(
+                self._quote(
+                    item,
+                    "global" if item.type_id == PLEX_TYPE_ID else "jita",
+                    query=query,
+                    quantity=500 if item.type_id == PLEX_TYPE_ID else 1,
+                )
+                for item in items
+            ),
+            return_exceptions=True,
+        )
+        sections = []
+        for item, result in zip(items, results):
+            if isinstance(result, Exception):
+                sections.append(
+                    f"{self._localized_name(item, self._prefers_chinese(query))}\n"
+                    f"查询失败：{result}"
+                )
+            else:
+                sections.append(result.replace("\n\n", "\n", 1))
+        return "\n──────────\n".join(sections)
 
     def _search(self, query: str) -> str:
         if not query:
@@ -185,28 +330,44 @@ class EveFeature:
             return f"EVE 名称库{action}：SDE {build}，共 {count} 个类型。"
         return "用法：/jt 数据 更新｜强制更新｜状态"
 
-    @staticmethod
-    def _candidate_text(query: str, candidates: list[EveType]) -> str:
+    @classmethod
+    def _candidate_text(cls, query: str, candidates: list[EveType]) -> str:
         if not candidates:
             return f"没有找到“{query}”。"
         lines = [f"“{query}”匹配到以下物品，请使用 /jt <ID> 查询："]
         lines.extend(
-            f"{index}. {item.display_name}（{item.type_id}）"
+            f"{index}. {cls._localized_name(item, cls._prefers_chinese(query))}（{item.type_id}）"
             for index, item in enumerate(candidates, 1)
         )
         return "\n".join(lines)
 
     @staticmethod
-    def _format_quote(item: EveType, quote: MarketQuote) -> str:
-        sell = EveFeature._isk(quote.sell_min)
-        buy = EveFeature._isk(quote.buy_max)
+    def _prefers_chinese(query: str) -> bool:
+        # ID 查询没有语言线索，面向当前中文插件默认使用中文名称。
+        return not query or query.isdigit() or bool(re.search(r"[\u3400-\u9fff]", query))
+
+    @staticmethod
+    def _localized_name(item: EveType, prefer_chinese: bool) -> str:
+        return (item.name_zh or item.name_en) if prefer_chinese else item.name_en
+
+    @staticmethod
+    def _format_quote(
+        item: EveType,
+        quote: MarketQuote,
+        *,
+        prefer_chinese: bool = True,
+        quantity: int = 1,
+    ) -> str:
+        sell = EveFeature._isk(quote.sell_min * quantity if quote.sell_min is not None else None)
+        buy = EveFeature._isk(quote.buy_max * quantity if quote.buy_max is not None else None)
         middle = (
-            EveFeature._isk((quote.sell_min + quote.buy_max) / 2)
+            EveFeature._isk((quote.sell_min + quote.buy_max) / 2 * quantity)
             if quote.sell_min is not None and quote.buy_max is not None
             else "暂无报价"
         )
         lines = [
-            f"📦 {item.display_name}",
+            f"{EveFeature._localized_name(item, prefer_chinese)}"
+            f"{f' × {quantity}' if quantity != 1 else ''}",
             "",
             f"最低卖价：{sell}",
             f"最高收价：{buy}",

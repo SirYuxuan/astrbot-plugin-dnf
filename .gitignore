@@ -11,3 +11,4 @@ last_egg_sent_date.json
 .ruff_cache/
 .pytest_cache/
 .DS_Store
+.eve-preview/

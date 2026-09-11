@@ -125,8 +125,8 @@
     "type": "object",
     "items": {
       "search_result_limit": {
-        "description": "候选结果数量",
-        "hint": "名称模糊查询最多显示多少个候选，范围 1-20。",
+        "description": "模糊查价数量",
+        "hint": "名称模糊查询最多为多少个匹配物品查价，范围 1-20。",
         "type": "int",
         "default": 5
       },
@@ -150,9 +150,33 @@
       },
       "cache_stale_seconds": {
         "description": "Redis 保留时间",
-        "hint": "行情分页数据在 Redis 中的最长保留秒数。",
+        "hint": "行情及历史数据在 Redis 中的最长保留秒数。建议不低于历史缓存时间。",
         "type": "int",
-        "default": 3600
+        "default": 43200
+      },
+      "history_cache_seconds": {
+        "description": "历史行情缓存时间",
+        "hint": "Adam4EVE 吉他 4-4 历史价格缓存秒数，默认 6 小时。",
+        "type": "int",
+        "default": 21600
+      },
+      "history_request_timeout_seconds": {
+        "description": "历史行情请求超时",
+        "hint": "请求 Adam4EVE 历史页面的超时秒数。",
+        "type": "int",
+        "default": 30
+      },
+      "history_fallback_to_esi": {
+        "description": "启用历史行情降级",
+        "hint": "Adam4EVE 不可用时，是否改用 CCP ESI 的 The Forge 区域历史。",
+        "type": "bool",
+        "default": true
+      },
+      "adam4eve_history_url": {
+        "description": "Adam4EVE 历史地址",
+        "hint": "通常无需修改；用于吉他 4-4 空间站历史价格。",
+        "type": "string",
+        "default": "https://www.adam4eve.eu/hub_type_history.php"
       },
       "redis_url": {
         "description": "Redis 地址",

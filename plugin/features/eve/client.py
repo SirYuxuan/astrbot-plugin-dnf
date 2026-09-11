@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import json
 import logging
+import math
+import re
 import threading
 import time
 from dataclasses import dataclass
+from datetime import date
 from email.utils import parsedate_to_datetime
 from typing import Protocol
 
@@ -26,6 +29,16 @@ class MarketQuote:
     buy_max: float | None
 
 
+@dataclass(frozen=True)
+class MarketHistoryDay:
+    date: date
+    average: float
+    highest: float
+    lowest: float
+    volume: int
+    source: str = "CCP ESI regional history"
+
+
 @dataclass
 class _CacheEntry:
     data: list[dict]
@@ -39,6 +52,14 @@ class OrderPageCache(Protocol):
     def get(self, key: str) -> _CacheEntry | None: ...
 
     def set(self, key: str, entry: _CacheEntry) -> None: ...
+
+
+class MarketClient(Protocol):
+    def quote(self, type_id: int, market: str = "jita") -> MarketQuote: ...
+
+    def history(
+        self, type_id: int, market: str = "jita", days: int = 30
+    ) -> list[MarketHistoryDay]: ...
 
 
 class MemoryOrderCache:
@@ -154,6 +175,28 @@ class EsiMarketClient:
             buy_max=max((float(order["price"]) for order in buys), default=None),
         )
 
+    def history(self, type_id: int, market: str = "jita", days: int = 30) -> list[MarketHistoryDay]:
+        if market == "global":
+            region_id = PLEX_REGION_ID
+        elif market == "jita":
+            region_id = JITA_REGION_ID
+        else:
+            raise ValueError(f"不支持的市场：{market}")
+        url = f"https://esi.evetech.net/markets/{region_id}/history/"
+        data, _, _ = self._get_page(url, {"type_id": type_id})
+        history = [
+            MarketHistoryDay(
+                date=date.fromisoformat(str(row["date"])),
+                average=float(row["average"]),
+                highest=float(row["highest"]),
+                lowest=float(row["lowest"]),
+                volume=int(row["volume"]),
+            )
+            for row in data
+        ]
+        history.sort(key=lambda row: row.date)
+        return history[-max(1, days) :]
+
     def _get_page(self, url: str, params: dict) -> tuple[list[dict], int, str | None]:
         key = requests.Request("GET", url, params=params).prepare().url or url
         now = time.time()
@@ -194,3 +237,144 @@ class EsiMarketClient:
             except (TypeError, ValueError):
                 pass
         return now + self.cache_seconds
+
+
+class Adam4EveHistoryClient:
+    """Read Jita 4-4 daily best bid/ask history published by Adam4EVE."""
+
+    DEFAULT_URL = "https://www.adam4eve.eu/hub_type_history.php"
+    SOURCE = "Adam4EVE Jita 4-4"
+    _ROW = re.compile(
+        r"\[\s*new Date\('(?P<date>\d{4}-\d{2}-\d{2})'\)\s*,"
+        r"\s*(?P<buy_high>[-+\d.eE]+|NaN|null)\s*,"
+        r"\s*(?:[-+\d.eE]+|NaN|null)\s*,"
+        r"\s*(?:[-+\d.eE]+|NaN|null)\s*,"
+        r"\s*(?:[-+\d.eE]+|NaN|null)\s*,"
+        r"\s*(?P<sell_low>[-+\d.eE]+|NaN|null)\s*,"
+        r"\s*(?:[-+\d.eE]+|NaN|null)\s*\]",
+        re.IGNORECASE,
+    )
+
+    def __init__(
+        self,
+        timeout: int = 30,
+        cache_seconds: int = 21600,
+        user_agent: str = "",
+        cache: OrderPageCache | None = None,
+        url: str = DEFAULT_URL,
+    ):
+        self.timeout = timeout
+        self.cache_seconds = max(300, cache_seconds)
+        self.headers = {"User-Agent": user_agent}
+        self.cache = cache or MemoryOrderCache()
+        self.url = url
+
+    def history(self, type_id: int, days: int = 30) -> list[MarketHistoryDay]:
+        params = {"typeID": type_id, "stationID": JITA_STATION_ID, "mode": "min"}
+        key = requests.Request("GET", self.url, params=params).prepare().url or self.url
+        now = time.time()
+        cached = self.cache.get(key)
+        if cached and cached.expires_at > now:
+            return self._decode(cached.data, days)
+
+        response = requests.get(
+            self.url,
+            params=params,
+            headers=self.headers,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        rows = self._parse(response.text)
+        if not rows:
+            raise ValueError("Adam4EVE 未返回可用的吉他历史价格")
+        self.cache.set(
+            key,
+            _CacheEntry(
+                data=rows,
+                expires_at=now + self.cache_seconds,
+                etag=None,
+                last_modified=response.headers.get("Last-Modified"),
+                pages=1,
+            ),
+        )
+        return self._decode(rows, days)
+
+    @classmethod
+    def _parse(cls, html: str) -> list[dict]:
+        marker = 'new Dygraph(document.getElementById("div_prices")'
+        start = html.find(marker)
+        if start < 0:
+            return []
+        end = html.find("labels:", start)
+        graph = html[start : end if end >= 0 else len(html)]
+        rows: list[dict] = []
+        for match in cls._ROW.finditer(graph):
+            buy_high = cls._number(match.group("buy_high"))
+            sell_low = cls._number(match.group("sell_low"))
+            if buy_high is None and sell_low is None:
+                continue
+            # A missing side is plotted as a point instead of inventing a spread.
+            buy_high = sell_low if buy_high is None else buy_high
+            sell_low = buy_high if sell_low is None else sell_low
+            rows.append(
+                {
+                    "date": match.group("date"),
+                    "buy_high": buy_high,
+                    "sell_low": sell_low,
+                }
+            )
+        return rows
+
+    @staticmethod
+    def _number(value: str) -> float | None:
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return None
+        return number if math.isfinite(number) else None
+
+    @classmethod
+    def _decode(cls, rows: list[dict], days: int) -> list[MarketHistoryDay]:
+        history = [
+            MarketHistoryDay(
+                date=date.fromisoformat(str(row["date"])),
+                average=(float(row["buy_high"]) + float(row["sell_low"])) / 2,
+                highest=float(row["sell_low"]),
+                lowest=float(row["buy_high"]),
+                volume=0,
+                source=cls.SOURCE,
+            )
+            for row in rows
+        ]
+        history.sort(key=lambda row: row.date)
+        return history[-max(1, days) :]
+
+
+class EveMarketClient:
+    """Market facade: ESI quotes, Adam4EVE station history, ESI fallback."""
+
+    def __init__(
+        self,
+        esi: EsiMarketClient,
+        station_history: Adam4EveHistoryClient | None = None,
+        fallback_to_esi: bool = True,
+    ):
+        self.esi = esi
+        self.station_history = station_history
+        self.fallback_to_esi = fallback_to_esi
+
+    def quote(self, type_id: int, market: str = "jita") -> MarketQuote:
+        return self.esi.quote(type_id, market)
+
+    def history(self, type_id: int, market: str = "jita", days: int = 30) -> list[MarketHistoryDay]:
+        if market == "jita" and self.station_history is not None:
+            try:
+                return self.station_history.history(type_id, days)
+            except Exception:
+                if not self.fallback_to_esi:
+                    raise
+                logger.exception(
+                    "Adam4EVE 吉他历史价格查询失败，降级到 ESI 区域历史: type_id=%s",
+                    type_id,
+                )
+        return self.esi.history(type_id, market, days)

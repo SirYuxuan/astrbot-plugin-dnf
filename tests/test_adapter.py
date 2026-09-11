@@ -31,7 +31,13 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as directory:
             modules = {
                 name: ModuleType(name)
-                for name in ("astrbot", "astrbot.api", "astrbot.api.event", "astrbot.api.star")
+                for name in (
+                    "astrbot",
+                    "astrbot.api",
+                    "astrbot.api.event",
+                    "astrbot.api.star",
+                    "astrbot.api.message_components",
+                )
             }
             modules["astrbot.api"].logger = logging.getLogger("test.astrbot")
             commands = []
@@ -44,7 +50,15 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
                 def __init__(self, context):
                     self.context = context
 
+                async def html_render(self, template, data, options=None):
+                    return "https://example.test/chart.png"
+
             modules["astrbot.api.event"].filter = SimpleNamespace(command=command)
+            modules["astrbot.api.message_components"].Plain = lambda text: ("text", text)
+            modules["astrbot.api.message_components"].Image = SimpleNamespace(
+                fromFileSystem=lambda path: ("image-file", path),
+                fromURL=lambda url: ("image-url", url),
+            )
             star_module = modules["astrbot.api.star"]
             star_module.Context = object
             star_module.Star = Star
@@ -81,15 +95,33 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
                     with self.assertLogs("test.astrbot", level="ERROR"):
                         result = [item async for item in plugin.dnf_gold_ratio(event)]
                     self.assertEqual(result, ["金币比例查询出现异常，请稍后重试"])
-                    plugin.app.eve.handle = AsyncMock(return_value="EVE 查询结果")
+                    plugin.app.eve.handle_reply = AsyncMock(
+                        return_value=SimpleNamespace(text="EVE 查询结果", chart_html=None)
+                    )
                     event.message_str = "/jt PLEX * 500"
                     event.role = "admin"
                     event.sender = SimpleNamespace(user_id="42")
+                    event.image_result = lambda path: f"IMAGE:{path}"
                     self.assertEqual(
                         [item async for item in plugin.eve_market(event)], ["EVE 查询结果"]
                     )
-                    plugin.app.eve.handle.assert_awaited_once_with(
+                    plugin.app.eve.handle_reply.assert_awaited_once_with(
                         "/jt PLEX * 500", is_admin=True, actor="42"
+                    )
+                    plugin.app.eve.handle_reply = AsyncMock(
+                        return_value=SimpleNamespace(
+                            text="EVE 查询结果", chart_html="<html>chart</html>"
+                        )
+                    )
+                    event.chain_result = lambda chain: chain
+                    self.assertEqual(
+                        [item async for item in plugin.eve_market(event)],
+                        [
+                            [
+                                ("text", "EVE 查询结果"),
+                                ("image-url", "https://example.test/chart.png"),
+                            ]
+                        ],
                     )
                     await plugin.terminate()
                     await plugin.terminate()

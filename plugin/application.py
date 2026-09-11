@@ -6,7 +6,14 @@ from .core.runtime import FeatureRuntime
 from .core.storage import JsonFileStore
 from .features.egg.service import EggFeature
 from .features.eve.catalog import EveCatalog
-from .features.eve.client import EsiMarketClient, MemoryOrderCache, RedisOrderCache
+from .features.eve.chart import PriceChartRenderer
+from .features.eve.client import (
+    Adam4EveHistoryClient,
+    EsiMarketClient,
+    EveMarketClient,
+    MemoryOrderCache,
+    RedisOrderCache,
+)
 from .features.eve.sde import SdeUpdater
 from .features.eve.service import EveFeature
 from .features.gold.service import GoldFeature
@@ -25,16 +32,33 @@ class PluginApplication:
             cache = RedisOrderCache(
                 redis_url,
                 prefix=str(config.get("eve.redis_prefix", "yuxuandnf:eve")),
-                stale_seconds=int(config.get("eve.cache_stale_seconds", 3600)),
+                stale_seconds=int(config.get("eve.cache_stale_seconds", 43200)),
             )
         else:
             cache = MemoryOrderCache()
         user_agent = str(config.get("eve.user_agent", ""))
-        market = EsiMarketClient(
+        esi = EsiMarketClient(
             timeout=int(config.get("eve.request_timeout_seconds", 30)),
             cache_seconds=int(config.get("eve.cache_seconds", 300)),
             user_agent=user_agent,
             cache=cache,
+        )
+        station_history = Adam4EveHistoryClient(
+            timeout=int(config.get("eve.history_request_timeout_seconds", 30)),
+            cache_seconds=int(config.get("eve.history_cache_seconds", 21600)),
+            user_agent=user_agent,
+            cache=cache,
+            url=str(
+                config.get(
+                    "eve.adam4eve_history_url",
+                    Adam4EveHistoryClient.DEFAULT_URL,
+                )
+            ),
+        )
+        market = EveMarketClient(
+            esi,
+            station_history,
+            fallback_to_esi=bool(config.get("eve.history_fallback_to_esi", True)),
         )
         updater = SdeUpdater(
             catalog,
@@ -46,5 +70,6 @@ class PluginApplication:
             market,
             updater,
             search_result_limit=int(config.get("eve.search_result_limit", 5)),
+            chart_renderer=PriceChartRenderer(),
         )
         self.runtime = FeatureRuntime((self.gold, self.oil, self.egg))

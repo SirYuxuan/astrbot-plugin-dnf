@@ -32,3 +32,47 @@ async def query_result(event, label: str, query: Callable[..., Awaitable[str]], 
         logger.exception("%s查询异常", label)
         text = f"{label}查询出现异常，请稍后重试"
     return event.plain_result(text)
+
+
+async def eve_query_results(
+    event,
+    query: Callable[..., Awaitable],
+    *args,
+    html_renderer: Callable[..., Awaitable[str]] | None = None,
+    **kwargs,
+) -> list:
+    """Adapt an EVE reply to one AstrBot message, including the chart when present."""
+    try:
+        reply = await query(*args, **kwargs)
+    except Exception:
+        logger.exception("EVE 市场查询异常")
+        return [event.plain_result("EVE 市场查询出现异常，请稍后重试")]
+    if not reply.chart_html or html_renderer is None:
+        return [event.plain_result(reply.text)]
+    import astrbot.api.message_components as Comp
+
+    try:
+        rendered = await html_renderer(
+            reply.chart_html,
+            {},
+            options={"type": "png", "full_page": True, "omit_background": True},
+        )
+    except Exception:
+        logger.exception("EVE HTML 走势图渲染失败，降级为文字回复")
+        return [event.plain_result(reply.text)]
+    if not rendered:
+        return [event.plain_result(reply.text)]
+    rendered = str(rendered)
+    image = (
+        Comp.Image.fromURL(rendered)
+        if rendered.startswith(("http://", "https://", "data:"))
+        else Comp.Image.fromFileSystem(rendered)
+    )
+    return [
+        event.chain_result(
+            [
+                Comp.Plain(reply.text),
+                image,
+            ]
+        )
+    ]

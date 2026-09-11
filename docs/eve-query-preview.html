@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>EVE 查价效果测试</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #071011;
+        --panel: #0e191a;
+        --panel-strong: #132223;
+        --line: #263839;
+        --text: #e9f1ed;
+        --muted: #8ea19c;
+        --accent: #e4b95f;
+        --accent-soft: rgba(228, 185, 95, 0.12);
+        --green: #70b99d;
+        --red: #dc8c7c;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        background:
+          radial-gradient(circle at 12% 0%, rgba(35, 94, 88, 0.22), transparent 34rem),
+          linear-gradient(145deg, #071011 0%, #091415 54%, #050a0b 100%);
+        color: var(--text);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          "PingFang SC", sans-serif;
+      }
+
+      .shell {
+        width: min(1080px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 54px 0 72px;
+      }
+
+      header {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 26px;
+      }
+
+      .eyebrow {
+        margin: 0 0 8px;
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 750;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 0;
+        font-family: Georgia, "Songti SC", serif;
+        font-size: clamp(32px, 6vw, 56px);
+        font-weight: 500;
+        letter-spacing: -0.04em;
+      }
+
+      .subhead {
+        max-width: 450px;
+        margin: 0 0 5px;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.7;
+        text-align: right;
+      }
+
+      .terminal {
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: rgba(14, 25, 26, 0.92);
+        box-shadow: 0 28px 80px rgba(0, 0, 0, 0.35);
+      }
+
+      .terminal-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 48px;
+        padding: 0 18px;
+        border-bottom: 1px solid var(--line);
+        background: #0a1415;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .status::before {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--green);
+        box-shadow: 0 0 12px var(--green);
+        content: "";
+      }
+
+      .content {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 270px;
+        min-height: 580px;
+      }
+
+      .conversation {
+        padding: 28px;
+      }
+
+      .message {
+        max-width: 660px;
+        margin-bottom: 24px;
+      }
+
+      .message-label {
+        margin-bottom: 8px;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .command {
+        display: inline-block;
+        padding: 12px 15px;
+        border: 1px solid #314849;
+        border-radius: 10px;
+        background: #152425;
+        color: #f5f8f6;
+        font: 14px/1.4 "SFMono-Regular", Consolas, monospace;
+      }
+
+      #result {
+        min-height: 330px;
+        margin: 0;
+        color: var(--text);
+        font: 14px/1.85 "SFMono-Regular", Consolas, monospace;
+        overflow-wrap: anywhere;
+        white-space: pre-wrap;
+      }
+
+      #chart {
+        display: none;
+        width: 100%;
+        aspect-ratio: 1200 / 760;
+        margin-top: 24px;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+      }
+
+      aside {
+        padding: 24px;
+        border-left: 1px solid var(--line);
+        background: rgba(7, 16, 17, 0.55);
+      }
+
+      aside h2 {
+        margin: 0 0 14px;
+        font-size: 12px;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+      }
+
+      .presets {
+        display: grid;
+        gap: 9px;
+      }
+
+      button {
+        width: 100%;
+        padding: 11px 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: transparent;
+        color: var(--muted);
+        font: 12px "SFMono-Regular", Consolas, monospace;
+        text-align: left;
+        cursor: pointer;
+        transition: 160ms ease;
+      }
+
+      button:hover,
+      button.active {
+        border-color: var(--accent);
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+
+      .rule {
+        height: 1px;
+        margin: 24px 0;
+        background: var(--line);
+      }
+
+      .notes {
+        display: grid;
+        gap: 12px;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.55;
+      }
+
+      .input-row {
+        display: flex;
+        gap: 10px;
+        padding: 18px 28px;
+        border-top: 1px solid var(--line);
+        background: #0a1415;
+      }
+
+      input {
+        min-width: 0;
+        flex: 1;
+        padding: 12px 14px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        outline: none;
+        background: #071011;
+        color: var(--text);
+        font: 14px "SFMono-Regular", Consolas, monospace;
+      }
+
+      input:focus {
+        border-color: var(--accent);
+      }
+
+      .run {
+        width: auto;
+        padding-inline: 20px;
+        border-color: var(--accent);
+        background: var(--accent);
+        color: #17130b;
+        font-weight: 750;
+        text-align: center;
+      }
+
+      .run:hover {
+        background: #f0c873;
+        color: #17130b;
+      }
+
+      @keyframes reveal {
+        from {
+          opacity: 0;
+          transform: translateY(5px);
+        }
+      }
+
+      @media (max-width: 760px) {
+        header {
+          display: block;
+        }
+
+        .subhead {
+          margin-top: 14px;
+          text-align: left;
+        }
+
+        .content {
+          display: block;
+        }
+
+        aside {
+          border-top: 1px solid var(--line);
+          border-left: 0;
+        }
+
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <header>
+        <div>
+          <p class="eyebrow">AstrBot Plugin Preview</p>
+          <h1>Jita Price Query</h1>
+        </div>
+        <p class="subhead">
+          直接调用当前插件业务代码和 CCP Tranquility ESI。页面显示的名称匹配、价格与回复文本
+          均为真实运行结果。
+        </p>
+      </header>
+
+      <section class="terminal">
+        <div class="terminal-bar">
+          <span>eve-query-preview / Tranquility</span>
+          <span class="status">真实 ESI 已连接</span>
+        </div>
+
+        <div class="content">
+          <div class="conversation">
+            <div class="message">
+              <div class="message-label">用户命令</div>
+              <div class="command" id="command">/jt 皮特电磁护盾</div>
+            </div>
+            <div class="message">
+              <div class="message-label">机器人回复</div>
+              <pre id="result" aria-live="polite"></pre>
+              <iframe id="chart" title="30 日价格走势图"></iframe>
+            </div>
+          </div>
+
+          <aside>
+            <h2>测试场景</h2>
+            <div class="presets" id="presets"></div>
+            <div class="rule"></div>
+            <div class="notes">
+              <span>中文查询 → 仅中文标题</span>
+              <span>英文查询 → 仅英文标题</span>
+              <span>模糊匹配 → 最多查询 5 个真实行情</span>
+              <span>蓝图和涂装 → 默认过滤</span>
+              <span>PLEX → 默认计算 500 个</span>
+            </div>
+          </aside>
+        </div>
+
+        <form class="input-row" id="query-form">
+          <input id="query" value="/jt 皮特电磁护盾" aria-label="测试命令" />
+          <button class="run" type="submit">运行测试</button>
+        </form>
+      </section>
+    </main>
+
+    <script>
+      const scenarios = [
+        "/jt 皮特电磁护盾",
+        "/jt 毒蜥",
+        "/jt Gila",
+        "/jt PLEX",
+        "/jt 伊甸币",
+        "/jt 月卡",
+      ];
+
+      async function render(command) {
+        document.querySelector("#command").textContent = command;
+        document.querySelector("#query").value = command;
+        const result = document.querySelector("#result");
+        const chart = document.querySelector("#chart");
+        result.textContent = "正在调用真实业务代码和 CCP ESI…";
+        chart.style.display = "none";
+        chart.removeAttribute("src");
+        try {
+          const response = await fetch("/api/query", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ command }),
+          });
+          const payload = await response.json();
+          result.textContent = payload.output || payload.error || "没有返回结果";
+          if (payload.chart) {
+            chart.src = payload.chart;
+            chart.style.display = "block";
+          }
+        } catch (error) {
+          result.textContent = `请求失败：${error.message}`;
+        }
+        document.querySelectorAll(".presets button").forEach((button) => {
+          button.classList.toggle("active", button.dataset.command === command);
+        });
+      }
+
+      const presetRoot = document.querySelector("#presets");
+      scenarios.forEach((command) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.dataset.command = command;
+        button.textContent = command;
+        button.addEventListener("click", () => render(command));
+        presetRoot.append(button);
+      });
+
+      document.querySelector("#query-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        const value = document.querySelector("#query").value.trim();
+        if (value) render(value);
+      });
+
+      render(scenarios[0]);
+    </script>
+  </body>
+</html>
