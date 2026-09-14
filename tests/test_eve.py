@@ -1,17 +1,21 @@
+import asyncio
 import json
 import tempfile
+import time
 import unittest
 import zipfile
 from datetime import date, timedelta
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+import requests
+
 from plugin.features.eve.catalog import EveCatalog, EveType, normalize_name
 from plugin.features.eve.chart import PriceChartRenderer
 from plugin.features.eve.client import (
     Adam4EveHistoryClient,
-    EsiMarketClient,
     EveMarketClient,
+    FuzzworkMarketClient,
     MarketHistoryDay,
     MarketQuote,
     MemoryOrderCache,
@@ -154,6 +158,36 @@ class EveServiceTests(unittest.IsolatedAsyncioTestCase):
             ],
         )
 
+    async def test_multiple_results_use_one_batch_market_request(self):
+        fallback = Mock()
+        fallback.supports_batch_quotes = True
+        fallback.quote_many.return_value = {
+            17715: MarketQuote(17715, "吉他 4-4", 70, 60),
+            17718: MarketQuote(17718, "吉他 4-4", 80, 50),
+        }
+        feature = EveFeature(
+            self.catalog,
+            EveMarketClient(fallback),
+            self.updater,
+        )
+
+        text = await feature.handle("jita 毒蜥")
+
+        self.assertIn("最低卖价：70.00 ISK", text)
+        self.assertIn("最低卖价：80.00 ISK", text)
+        fallback.quote_many.assert_called_once_with([17715, 17718], "jita")
+
+    async def test_multiple_result_errors_do_not_leak_ssl_details(self):
+        self.market.quote.side_effect = requests.exceptions.SSLError(
+            "[SSL: UNEXPECTED_EOF_WHILE_READING] internal host details"
+        )
+
+        text = await self.feature.handle("jita 毒蜥")
+
+        self.assertIn("查询失败：行情接口暂时不可用，请稍后重试", text)
+        self.assertNotIn("SSL", text)
+        self.assertNotIn("esi.evetech.net", text)
+
     async def test_explicit_blueprint_and_skin_queries_are_allowed(self):
         blueprint = await self.feature.handle("/jt 毒蜥级蓝图")
         skin = await self.feature.handle("/jt Gila Blue SKIN")
@@ -237,6 +271,38 @@ class EveServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("#23ad7b", reply.chart_html)
         self.assertIn("#2878ff", reply.chart_html)
         self.assertIn("data:font/woff2;base64,", reply.chart_html)
+        self.assertIn('id="astrbot-t2i-shiki-runtime"', reply.chart_html)
+
+    async def test_garmur_shorthand_is_a_single_priced_result(self):
+        self.catalog.replace_types(
+            [
+                EveType(33816, "Garmur", "加姆级", group_id=25, market_group_id=1365),
+            ],
+            "garmur-test",
+        )
+        feature = EveFeature(
+            self.catalog,
+            self.market,
+            self.updater,
+            chart_renderer=PriceChartRenderer(),
+        )
+        self.market.history.return_value = [
+            MarketHistoryDay(
+                date(2026, 9, 11),
+                66_940_000,
+                68_880_000,
+                65_000_000,
+                1,
+                "Adam4EVE Jita 4-4",
+            )
+        ]
+
+        reply = await feature.handle_reply("jita 加姆")
+
+        self.assertTrue(reply.text.startswith("加姆级\n"))
+        self.assertIsNotNone(reply.chart_html)
+        self.market.quote.assert_called_once_with(33816, "jita")
+        self.market.history.assert_called_once_with(33816, "jita", 30)
 
     async def test_multiple_fuzzy_results_do_not_generate_chart(self):
         feature = EveFeature(
@@ -248,6 +314,83 @@ class EveServiceTests(unittest.IsolatedAsyncioTestCase):
         reply = await feature.handle_reply("/jt 毒蜥")
         self.assertIsNone(reply.chart_html)
         self.market.history.assert_not_called()
+
+    async def test_single_result_fetches_quote_and_history_concurrently(self):
+        def slow_quote(type_id, market):
+            time.sleep(0.2)
+            return MarketQuote(type_id, "吉他 4-4", 10, 9)
+
+        def slow_history(type_id, market, days):
+            time.sleep(0.2)
+            return [MarketHistoryDay(date(2026, 9, 11), 9.5, 10, 9, 1)]
+
+        self.market.quote.side_effect = slow_quote
+        self.market.history.side_effect = slow_history
+        feature = EveFeature(
+            self.catalog,
+            self.market,
+            self.updater,
+            chart_renderer=PriceChartRenderer(),
+        )
+        started = time.perf_counter()
+        reply = await feature.handle_reply("/jt 三钛合金")
+        elapsed = time.perf_counter() - started
+
+        self.assertIsNotNone(reply.chart_html)
+        self.assertLess(elapsed, 0.34, f"quote and history ran serially in {elapsed:.3f}s")
+
+    async def test_concurrent_identical_queries_share_one_upstream_flight(self):
+        def slow_quote(type_id, market):
+            time.sleep(0.1)
+            return MarketQuote(type_id, "吉他 4-4", 10, 9)
+
+        def slow_history(type_id, market, days):
+            time.sleep(0.1)
+            return [MarketHistoryDay(date(2026, 9, 11), 9.5, 10, 9, 1)]
+
+        self.market.quote.side_effect = slow_quote
+        self.market.history.side_effect = slow_history
+        feature = EveFeature(
+            self.catalog,
+            self.market,
+            self.updater,
+            chart_renderer=PriceChartRenderer(),
+        )
+
+        replies = await asyncio.gather(*(feature.handle_reply("/jt 三钛合金") for _ in range(8)))
+
+        self.assertTrue(all(reply.text == replies[0].text for reply in replies))
+        self.assertEqual(self.market.quote.call_count, 1)
+        self.assertEqual(self.market.history.call_count, 1)
+
+    async def test_different_items_are_not_globally_queued(self):
+        def slow_quote(type_id, market):
+            time.sleep(0.15)
+            return MarketQuote(type_id, "吉他 4-4", 10, 9)
+
+        def slow_history(type_id, market, days):
+            time.sleep(0.15)
+            return [MarketHistoryDay(date(2026, 9, 11), 9.5, 10, 9, 1)]
+
+        self.market.quote.side_effect = slow_quote
+        self.market.history.side_effect = slow_history
+        feature = EveFeature(
+            self.catalog,
+            self.market,
+            self.updater,
+            chart_renderer=PriceChartRenderer(),
+        )
+        started = time.perf_counter()
+        replies = await asyncio.gather(
+            feature.handle_reply("/jt 三钛合金"),
+            feature.handle_reply("/jt 响尾蛇级"),
+        )
+        elapsed = time.perf_counter() - started
+
+        self.assertEqual(len(replies), 2)
+        self.assertEqual(self.market.quote.call_count, 2)
+        self.assertEqual(self.market.history.call_count, 2)
+        self.assertLess(elapsed, 0.28, f"different items were globally queued in {elapsed:.3f}s")
 
 
 class SdeTests(unittest.TestCase):
@@ -269,6 +412,55 @@ class SdeTests(unittest.TestCase):
 
 
 class MarketClientTests(unittest.TestCase):
+    @patch("plugin.features.eve.client.requests.get")
+    def test_fuzzwork_batches_multiple_jita_types_in_one_request(self, get):
+        response = Mock()
+        response.raise_for_status.return_value = None
+        response.json.return_value = {
+            "34": {"buy": {"max": "3.83"}, "sell": {"min": "3.98"}},
+            "63777": {"buy": {"max": "7246"}, "sell": {"min": "49980"}},
+        }
+        get.return_value = response
+
+        quotes = FuzzworkMarketClient(cache=MemoryOrderCache()).quote_many([34, 63777])
+
+        self.assertEqual((quotes[34].sell_min, quotes[34].buy_max), (3.98, 3.83))
+        self.assertEqual((quotes[63777].sell_min, quotes[63777].buy_max), (49980, 7246))
+        get.assert_called_once()
+        self.assertEqual(get.call_args.kwargs["params"]["types"], "34,63777")
+
+    @patch("plugin.features.eve.client.requests.get")
+    def test_fuzzwork_uses_global_region_for_plex(self, get):
+        response = Mock()
+        response.raise_for_status.return_value = None
+        response.json.return_value = {
+            "44992": {
+                "buy": {"max": "4766000"},
+                "sell": {"min": "4952000"},
+            }
+        }
+        get.return_value = response
+
+        quote = FuzzworkMarketClient(cache=MemoryOrderCache()).quote(44992, "global")
+
+        self.assertEqual((quote.sell_min, quote.buy_max), (4_952_000, 4_766_000))
+        self.assertEqual(get.call_args.kwargs["params"]["region"], 19000001)
+        self.assertNotIn("station", get.call_args.kwargs["params"])
+
+    def test_market_quote_can_use_a_secondary_provider(self):
+        primary = Mock()
+        primary.quote.side_effect = OSError("primary unavailable")
+        fallback = Mock()
+        expected = MarketQuote(63777, "吉他 4-4", 49980, 7246)
+        fallback.quote.return_value = expected
+        market = EveMarketClient(primary, quote_fallback=fallback)
+
+        with self.assertLogs("plugin.features.eve.client", level="ERROR"):
+            actual = market.quote(63777, "jita")
+
+        self.assertEqual(actual, expected)
+        fallback.quote.assert_called_once_with(63777, "jita")
+
     def test_memory_cache_preserves_pagination_metadata(self):
         cache = MemoryOrderCache()
         entry = _CacheEntry([], 9999999999, '"etag"', "today", 3)
@@ -286,60 +478,6 @@ class MarketClientTests(unittest.TestCase):
             cache.set("key", entry)
             loaded = cache.get("key")
         self.assertIs(loaded, entry)
-
-    def test_jita_filters_station_and_aggregates_orders(self):
-        client = EsiMarketClient(cache=MemoryOrderCache())
-        client._get_page = Mock(
-            return_value=(
-                [
-                    {
-                        "location_id": 60003760,
-                        "is_buy_order": False,
-                        "price": 11,
-                        "volume_remain": 3,
-                    },
-                    {
-                        "location_id": 60003760,
-                        "is_buy_order": False,
-                        "price": 10,
-                        "volume_remain": 4,
-                    },
-                    {"location_id": 60003760, "is_buy_order": True, "price": 9, "volume_remain": 5},
-                    {"location_id": 1, "is_buy_order": False, "price": 1, "volume_remain": 99},
-                ],
-                1,
-                "today",
-            )
-        )
-        quote = client.quote(34)
-        self.assertEqual((quote.sell_min, quote.buy_max), (10, 9))
-
-    def test_history_returns_latest_days_in_date_order(self):
-        client = EsiMarketClient(cache=MemoryOrderCache())
-        client._get_page = Mock(
-            return_value=(
-                [
-                    {
-                        "date": "2026-09-10",
-                        "average": 10,
-                        "highest": 12,
-                        "lowest": 8,
-                        "volume": 100,
-                    },
-                    {
-                        "date": "2026-09-11",
-                        "average": 11,
-                        "highest": 13,
-                        "lowest": 9,
-                        "volume": 200,
-                    },
-                ],
-                1,
-                "today",
-            )
-        )
-        history = client.history(34, "jita", days=1)
-        self.assertEqual(history, [MarketHistoryDay(date(2026, 9, 11), 11, 13, 9, 200)])
 
     @patch("plugin.features.eve.client.requests.get")
     def test_adam4eve_history_parses_station_bid_ask_and_caches(self, get):
@@ -365,25 +503,23 @@ class MarketClientTests(unittest.TestCase):
         self.assertEqual(cached[0].date, date(2026, 9, 11))
         get.assert_called_once()
 
-    def test_market_facade_falls_back_to_esi_region_history(self):
-        esi = Mock()
+    def test_market_facade_returns_no_chart_history_when_adam4eve_fails(self):
+        current = Mock()
         station = Mock()
         station.history.side_effect = OSError("upstream unavailable")
-        expected = [MarketHistoryDay(date(2026, 9, 11), 11, 13, 9, 200)]
-        esi.history.return_value = expected
-        market = EveMarketClient(esi, station, fallback_to_esi=True)
+        market = EveMarketClient(current, station)
 
         with self.assertLogs("plugin.features.eve.client", level="ERROR"):
             actual = market.history(34, "jita", 30)
 
-        self.assertEqual(actual, expected)
+        self.assertEqual(actual, [])
         station.history.assert_called_once_with(34, 30)
-        esi.history.assert_called_once_with(34, "jita", 30)
+        current.history.assert_not_called()
 
-    def test_global_history_uses_esi_without_adam4eve(self):
-        esi = Mock()
+    def test_global_market_has_no_history_provider(self):
+        current = Mock()
         station = Mock()
-        market = EveMarketClient(esi, station)
-        market.history(44992, "global", 30)
+        market = EveMarketClient(current, station)
+        self.assertEqual(market.history(44992, "global", 30), [])
         station.history.assert_not_called()
-        esi.history.assert_called_once_with(44992, "global", 30)
+        current.history.assert_not_called()

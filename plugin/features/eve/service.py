@@ -34,6 +34,8 @@ class EveFeature:
         self.search_result_limit = min(20, max(1, search_result_limit))
         self.chart_renderer = chart_renderer
         self._update_lock = asyncio.Lock()
+        self._reply_flights: dict[str, asyncio.Task[EveReply]] = {}
+        self._reply_flights_lock = asyncio.Lock()
 
     async def handle(self, message: str, *, is_admin: bool = False, actor: str = "") -> str:
         command = re.sub(r"^/?(?:jita|jt)(?:\s+|$)", "", message.strip(), count=1).strip()
@@ -50,18 +52,48 @@ class EveFeature:
     async def handle_reply(
         self, message: str, *, is_admin: bool = False, actor: str = ""
     ) -> EveReply:
-        text = await self.handle(message, is_admin=is_admin, actor=actor)
-        if self.chart_renderer is None:
-            return EveReply(text)
         command = self._item_command(message)
         if command is None:
-            return EveReply(text)
+            return await self._handle_reply_once(message, is_admin=is_admin, actor=actor)
+        # Collapse concurrent identical lookups without serialising unrelated items.
+        flight_key = normalize_name(command)
+        async with self._reply_flights_lock:
+            task = self._reply_flights.get(flight_key)
+            if task is None:
+                task = asyncio.create_task(
+                    self._handle_reply_once(message, is_admin=is_admin, actor=actor)
+                )
+                self._reply_flights[flight_key] = task
+        try:
+            return await asyncio.shield(task)
+        finally:
+            if task.done():
+                async with self._reply_flights_lock:
+                    if self._reply_flights.get(flight_key) is task:
+                        self._reply_flights.pop(flight_key, None)
+
+    async def _handle_reply_once(
+        self, message: str, *, is_admin: bool = False, actor: str = ""
+    ) -> EveReply:
+        if self.chart_renderer is None:
+            return EveReply(await self.handle(message, is_admin=is_admin, actor=actor))
+        command = self._item_command(message)
+        if command is None:
+            return EveReply(await self.handle(message, is_admin=is_admin, actor=actor))
         resolved = await self._resolve_single(command)
         if resolved is None:
-            return EveReply(text)
+            return EveReply(await self.handle(message, is_admin=is_admin, actor=actor))
         item, market, quantity = resolved
+        # Current orders and history are independent upstream requests. Run them together so
+        # a first query costs roughly the slower request instead of the sum of both requests.
+        # We have already resolved the item above.  Calling ``handle`` here would repeat
+        # alias/exact/fuzzy database work before issuing the same quote request.
+        text_task = asyncio.create_task(
+            self._quote(item, market, query=command, quantity=quantity)
+        )
         try:
             history = await asyncio.to_thread(self.market.history, item.type_id, market, 30)
+            text = await text_task
             chart = await asyncio.to_thread(
                 self.chart_renderer.render,
                 item.type_id,
@@ -73,6 +105,7 @@ class EveFeature:
         except Exception:
             # 历史行情或绘图失败不能影响当前价格回复。
             logger.exception("生成 EVE 价格走势图失败: type_id=%s", item.type_id)
+            text = await text_task
             chart_html = None
         return EveReply(text, chart_html)
 
@@ -208,7 +241,7 @@ class EveFeature:
 
     @staticmethod
     def _is_tradeable(item: EveType) -> bool:
-        # 名称库为空时，显式 ID 使用占位对象并交由 ESI 判断是否存在行情。
+        # 名称库为空时，显式 ID 使用占位对象并交由行情服务判断是否存在报价。
         return item.name_en.startswith("Type ") or (
             item.published and item.market_group_id is not None
         )
@@ -225,7 +258,22 @@ class EveFeature:
         )
 
     async def _quotes(self, items: list[EveType], query: str) -> str:
-        """并发查询模糊匹配结果，避免逐项等待 ESI。"""
+        """优先批量查询模糊匹配结果，避免逐项等待行情接口。"""
+        quote_many = (
+            getattr(self.market, "quote_many", None)
+            if getattr(self.market, "supports_batch_quotes", False) is True
+            else None
+        )
+        if callable(quote_many) and all(item.type_id != PLEX_TYPE_ID for item in items):
+            try:
+                quotes = await asyncio.to_thread(
+                    quote_many,
+                    [item.type_id for item in items],
+                    "jita",
+                )
+                return self._format_quotes(items, query, quotes)
+            except Exception:
+                logger.exception("EVE 批量行情查询失败，降级到逐项查询")
         results = await asyncio.gather(
             *(
                 self._quote(
@@ -243,10 +291,27 @@ class EveFeature:
             if isinstance(result, Exception):
                 sections.append(
                     f"{self._localized_name(item, self._prefers_chinese(query))}\n"
-                    f"查询失败：{result}"
+                    "查询失败：行情接口暂时不可用，请稍后重试"
                 )
             else:
                 sections.append(result.replace("\n\n", "\n", 1))
+        return "\n──────────\n".join(sections)
+
+    def _format_quotes(
+        self, items: list[EveType], query: str, quotes: dict[int, MarketQuote]
+    ) -> str:
+        prefer_chinese = self._prefers_chinese(query)
+        sections = []
+        for item in items:
+            quote = quotes.get(item.type_id)
+            if quote is None:
+                sections.append(f"{self._localized_name(item, prefer_chinese)}\n暂无报价")
+            else:
+                sections.append(
+                    self._format_quote(item, quote, prefer_chinese=prefer_chinese).replace(
+                        "\n\n", "\n", 1
+                    )
+                )
         return "\n──────────\n".join(sections)
 
     def _search(self, query: str) -> str:

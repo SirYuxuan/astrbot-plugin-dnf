@@ -8,7 +8,6 @@ import threading
 import time
 from dataclasses import dataclass
 from datetime import date
-from email.utils import parsedate_to_datetime
 from typing import Protocol
 
 import requests
@@ -36,7 +35,7 @@ class MarketHistoryDay:
     highest: float
     lowest: float
     volume: int
-    source: str = "CCP ESI regional history"
+    source: str = "market history"
 
 
 @dataclass
@@ -82,7 +81,12 @@ class RedisOrderCache:
     def __init__(self, url: str, prefix: str = "yuxuandnf:eve", stale_seconds: int = 3600):
         import redis
 
-        self._redis = redis.Redis.from_url(url, decode_responses=True)
+        self._redis = redis.Redis.from_url(
+            url,
+            decode_responses=True,
+            socket_connect_timeout=1,
+            socket_timeout=1,
+        )
         self._prefix = prefix.rstrip(":")
         self._stale_seconds = max(300, stale_seconds)
         self._memory = MemoryOrderCache()
@@ -128,115 +132,6 @@ class RedisOrderCache:
             self._redis.setex(self._key(key), self._stale_seconds, payload)
         except Exception as error:
             logger.warning("写入 EVE Redis 缓存失败，使用内存缓存: %s", error)
-
-
-class EsiMarketClient:
-    def __init__(
-        self,
-        timeout: int = 20,
-        cache_seconds: int = 300,
-        user_agent: str = "",
-        cache: OrderPageCache | None = None,
-    ):
-        self.timeout = timeout
-        self.cache_seconds = cache_seconds
-        self.headers = {
-            "User-Agent": user_agent,
-            "X-Tenant": "tranquility",
-            "X-Compatibility-Date": "2020-01-01",
-        }
-        self.cache = cache or MemoryOrderCache()
-
-    def quote(self, type_id: int, market: str = "jita") -> MarketQuote:
-        if market == "global":
-            region_id, location_id, label = PLEX_REGION_ID, None, "Global PLEX Market"
-        elif market == "jita":
-            region_id, location_id, label = JITA_REGION_ID, JITA_STATION_ID, "吉他 4-4"
-        else:
-            raise ValueError(f"不支持的市场：{market}")
-        base = f"https://esi.evetech.net/markets/{region_id}/orders"
-        params = {"order_type": "all", "type_id": type_id, "page": 1}
-        first, pages, modified = self._get_page(base, params)
-        orders = list(first)
-        for page in range(2, pages + 1):
-            params["page"] = page
-            data, _, page_modified = self._get_page(base, params)
-            if modified and page_modified and page_modified != modified:
-                raise RuntimeError("ESI 订单分页跨越了缓存刷新，请稍后重试")
-            orders.extend(data)
-        if location_id is not None:
-            orders = [order for order in orders if int(order.get("location_id", 0)) == location_id]
-        sells = [order for order in orders if not order.get("is_buy_order")]
-        buys = [order for order in orders if order.get("is_buy_order")]
-        return MarketQuote(
-            type_id=type_id,
-            market=label,
-            sell_min=min((float(order["price"]) for order in sells), default=None),
-            buy_max=max((float(order["price"]) for order in buys), default=None),
-        )
-
-    def history(self, type_id: int, market: str = "jita", days: int = 30) -> list[MarketHistoryDay]:
-        if market == "global":
-            region_id = PLEX_REGION_ID
-        elif market == "jita":
-            region_id = JITA_REGION_ID
-        else:
-            raise ValueError(f"不支持的市场：{market}")
-        url = f"https://esi.evetech.net/markets/{region_id}/history/"
-        data, _, _ = self._get_page(url, {"type_id": type_id})
-        history = [
-            MarketHistoryDay(
-                date=date.fromisoformat(str(row["date"])),
-                average=float(row["average"]),
-                highest=float(row["highest"]),
-                lowest=float(row["lowest"]),
-                volume=int(row["volume"]),
-            )
-            for row in data
-        ]
-        history.sort(key=lambda row: row.date)
-        return history[-max(1, days) :]
-
-    def _get_page(self, url: str, params: dict) -> tuple[list[dict], int, str | None]:
-        key = requests.Request("GET", url, params=params).prepare().url or url
-        now = time.time()
-        cached = self.cache.get(key)
-        if cached and cached.expires_at > now:
-            return cached.data, cached.pages, cached.last_modified
-        headers = dict(self.headers)
-        if cached and cached.etag:
-            headers["If-None-Match"] = cached.etag
-        if cached and cached.last_modified:
-            headers["If-Modified-Since"] = cached.last_modified
-        response = requests.get(url, params=params, headers=headers, timeout=self.timeout)
-        if response.status_code == 304 and cached:
-            cached.expires_at = now + self.cache_seconds
-            cached.pages = int(response.headers.get("X-Pages", str(cached.pages)))
-            self.cache.set(key, cached)
-            return cached.data, cached.pages, cached.last_modified
-        response.raise_for_status()
-        data = response.json()
-        if not isinstance(data, list):
-            raise ValueError("ESI 市场接口返回格式异常")
-        expires_at = self._expires_at(response.headers.get("Expires"), now)
-        pages = int(response.headers.get("X-Pages", "1"))
-        entry = _CacheEntry(
-            data=data,
-            expires_at=expires_at,
-            etag=response.headers.get("ETag"),
-            last_modified=response.headers.get("Last-Modified"),
-            pages=pages,
-        )
-        self.cache.set(key, entry)
-        return data, pages, entry.last_modified
-
-    def _expires_at(self, expires: str | None, now: float) -> float:
-        if expires:
-            try:
-                return max(now + 1, parsedate_to_datetime(expires).timestamp())
-            except (TypeError, ValueError):
-                pass
-        return now + self.cache_seconds
 
 
 class Adam4EveHistoryClient:
@@ -313,7 +208,6 @@ class Adam4EveHistoryClient:
             sell_low = cls._number(match.group("sell_low"))
             if buy_high is None and sell_low is None:
                 continue
-            # A missing side is plotted as a point instead of inventing a spread.
             buy_high = sell_low if buy_high is None else buy_high
             sell_low = buy_high if sell_low is None else sell_low
             rows.append(
@@ -350,31 +244,147 @@ class Adam4EveHistoryClient:
         return history[-max(1, days) :]
 
 
-class EveMarketClient:
-    """Market facade: ESI quotes, Adam4EVE station history, ESI fallback."""
+class FuzzworkMarketClient:
+    """Batch current prices using Fuzzwork station/region aggregates."""
+
+    DEFAULT_URL = "https://market.fuzzwork.co.uk/aggregates/"
+    supports_batch_quotes = True
 
     def __init__(
         self,
-        esi: EsiMarketClient,
-        station_history: Adam4EveHistoryClient | None = None,
-        fallback_to_esi: bool = True,
+        timeout: int = 20,
+        cache_seconds: int = 300,
+        user_agent: str = "",
+        cache: OrderPageCache | None = None,
+        url: str = DEFAULT_URL,
     ):
-        self.esi = esi
-        self.station_history = station_history
-        self.fallback_to_esi = fallback_to_esi
+        self.timeout = timeout
+        self.cache_seconds = cache_seconds
+        self.headers = {"User-Agent": user_agent}
+        self.cache = cache or MemoryOrderCache()
+        self.url = url
 
     def quote(self, type_id: int, market: str = "jita") -> MarketQuote:
-        return self.esi.quote(type_id, market)
+        return self.quote_many([type_id], market)[type_id]
+
+    def quote_many(
+        self, type_ids: list[int], market: str = "jita"
+    ) -> dict[int, MarketQuote]:
+        if market == "jita":
+            scope = {"station": JITA_STATION_ID}
+            label = "吉他 4-4"
+        elif market == "global":
+            scope = {"region": PLEX_REGION_ID}
+            label = "Global PLEX Market"
+        else:
+            raise ValueError(f"不支持的市场：{market}")
+        ids = list(dict.fromkeys(int(type_id) for type_id in type_ids))
+        if not ids:
+            return {}
+        params = {**scope, "types": ",".join(map(str, ids))}
+        key = requests.Request("GET", self.url, params=params).prepare().url or self.url
+        now = time.time()
+        cached = self.cache.get(key)
+        if cached and cached.expires_at > now:
+            payload = cached.data[0] if cached.data else {}
+        else:
+            try:
+                response = requests.get(
+                    self.url,
+                    params=params,
+                    headers=self.headers,
+                    timeout=self.timeout,
+                )
+                response.raise_for_status()
+                payload = response.json()
+                if not isinstance(payload, dict):
+                    raise ValueError("Fuzzwork 行情接口返回格式异常")
+                self.cache.set(
+                    key,
+                    _CacheEntry(
+                        data=[payload],
+                        expires_at=now + self.cache_seconds,
+                        etag=None,
+                        last_modified=None,
+                        pages=1,
+                    ),
+                )
+            except (requests.RequestException, ValueError) as error:
+                if not cached:
+                    raise RuntimeError("吉他备用行情接口暂时不可用") from error
+                logger.warning("Fuzzwork 请求失败，使用过期缓存 %s: %s", key, error)
+                payload = cached.data[0] if cached.data else {}
+        return {type_id: self._decode_quote(type_id, payload, label) for type_id in ids}
+
+    @staticmethod
+    def _decode_quote(type_id: int, payload: dict, label: str) -> MarketQuote:
+        row = payload.get(str(type_id), {})
+        buy = row.get("buy", {}) if isinstance(row, dict) else {}
+        sell = row.get("sell", {}) if isinstance(row, dict) else {}
+        return MarketQuote(
+            type_id,
+            label,
+            FuzzworkMarketClient._price(sell.get("min")),
+            FuzzworkMarketClient._price(buy.get("max")),
+        )
+
+    @staticmethod
+    def _price(value: object) -> float | None:
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return None
+        return number if math.isfinite(number) and number > 0 else None
+
+class EveMarketClient:
+    """Market facade with independent current-price and history providers."""
+
+    supports_batch_quotes = True
+
+    def __init__(
+        self,
+        current: MarketClient,
+        station_history: Adam4EveHistoryClient | None = None,
+        history_fallback: MarketClient | None = None,
+        quote_fallback: MarketClient | None = None,
+    ):
+        self.current = current
+        self.station_history = station_history
+        self.history_fallback = history_fallback
+        self.quote_fallback = quote_fallback
+
+    def quote(self, type_id: int, market: str = "jita") -> MarketQuote:
+        try:
+            return self.current.quote(type_id, market)
+        except Exception:
+            if self.quote_fallback is None:
+                raise
+            logger.exception("主行情查询失败，使用备用行情: type_id=%s", type_id)
+            return self.quote_fallback.quote(type_id, market)
+
+    def quote_many(self, type_ids: list[int], market: str = "jita") -> dict[int, MarketQuote]:
+        primary_many = (
+            getattr(self.current, "quote_many", None)
+            if getattr(self.current, "supports_batch_quotes", False) is True
+            else None
+        )
+        if callable(primary_many):
+            return primary_many(type_ids, market)
+        fallback_many = (
+            getattr(self.quote_fallback, "quote_many", None)
+            if getattr(self.quote_fallback, "supports_batch_quotes", False) is True
+            else None
+        )
+        if callable(fallback_many):
+            return fallback_many(type_ids, market)
+        return {type_id: self.quote(type_id, market) for type_id in type_ids}
 
     def history(self, type_id: int, market: str = "jita", days: int = 30) -> list[MarketHistoryDay]:
         if market == "jita" and self.station_history is not None:
             try:
                 return self.station_history.history(type_id, days)
             except Exception:
-                if not self.fallback_to_esi:
-                    raise
-                logger.exception(
-                    "Adam4EVE 吉他历史价格查询失败，降级到 ESI 区域历史: type_id=%s",
-                    type_id,
-                )
-        return self.esi.history(type_id, market, days)
+                logger.exception("Adam4EVE 吉他历史价格查询失败: type_id=%s", type_id)
+        if self.history_fallback is not None:
+            return self.history_fallback.history(type_id, market, days)
+        return []

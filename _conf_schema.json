@@ -121,7 +121,7 @@
   },
   "eve": {
     "description": "EVE 欧服吉他查价",
-    "hint": "名称库、CCP ESI 请求和 Redis 共享缓存配置。",
+    "hint": "名称库、Fuzzwork 当前行情、Adam4EVE 历史和 Redis 共享缓存配置。",
     "type": "object",
     "items": {
       "search_result_limit": {
@@ -132,7 +132,7 @@
       },
       "request_timeout_seconds": {
         "description": "行情请求超时",
-        "hint": "CCP ESI 单次请求超时秒数。",
+        "hint": "Fuzzwork 当前行情单次请求超时秒数。",
         "type": "int",
         "default": 30
       },
@@ -144,7 +144,7 @@
       },
       "cache_seconds": {
         "description": "行情缓存时间",
-        "hint": "ESI 未返回有效 Expires 时使用的缓存秒数。",
+        "hint": "Fuzzwork 当前行情缓存秒数。",
         "type": "int",
         "default": 300
       },
@@ -166,17 +166,17 @@
         "type": "int",
         "default": 30
       },
-      "history_fallback_to_esi": {
-        "description": "启用历史行情降级",
-        "hint": "Adam4EVE 不可用时，是否改用 CCP ESI 的 The Forge 区域历史。",
-        "type": "bool",
-        "default": true
-      },
       "adam4eve_history_url": {
         "description": "Adam4EVE 历史地址",
         "hint": "通常无需修改；用于吉他 4-4 空间站历史价格。",
         "type": "string",
         "default": "https://www.adam4eve.eu/hub_type_history.php"
+      },
+      "fuzzwork_url": {
+        "description": "当前行情地址",
+        "hint": "吉他 4-4 及 PLEX 全局市场的当前价格批量查询接口。",
+        "type": "string",
+        "default": "https://market.fuzzwork.co.uk/aggregates/"
       },
       "redis_url": {
         "description": "Redis 地址",
@@ -192,8 +192,8 @@
         "default": "yuxuandnf:eve"
       },
       "user_agent": {
-        "description": "ESI User-Agent",
-        "hint": "CCP 建议包含应用名、版本和项目地址。",
+        "description": "行情 User-Agent",
+        "hint": "访问 Fuzzwork、Adam4EVE 和 SDE 时使用的应用标识。",
         "type": "string",
         "default": "astrbot-plugin-dnf/1.6 (+https://github.com/SirYuxuan/astrbot-plugin-dnf)"
       }

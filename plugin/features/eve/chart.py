@@ -173,9 +173,10 @@ body{{font-family:'CangEr JinKai',sans-serif;color:#17212b;background:#eef2f6}}
 <header class="header"><div class="icon-box"><img class="icon" src="{icon_url}" alt=""></div><div class="heading"><p class="eyebrow">EVE MARKET INTELLIGENCE</p><h1>{safe_name}{quantity_text}</h1></div><div class="badges"><span class="badge">{safe_market}</span><span class="badge">30D</span></div></header>
 <section class="metrics"><div class="metric"><div class="metric-label">{labels["latest"]}</div><div class="metric-value">{self._short_isk(latest)} ISK</div></div><div class="metric"><div class="metric-label">{labels["change"]}</div><div class="metric-value {change_class}">{change:+.2f}%</div></div><div class="metric"><div class="metric-label">{labels["range"]}</div><div class="metric-value">{self._short_isk(data_min)} – {self._short_isk(data_max)}</div></div></section>
 <section class="chart-panel"><div class="chart-title">{labels["title"]}</div><div id="chart"></div></section><div class="footer">TRANQUILITY · TYPE {type_id}</div>
-</main><script>{self._echarts_script()}</script><script>
+</main><!-- AstrBot sees this marker and skips injecting its unrelated 1.2 MB Shiki runtime. -->
+<script id="astrbot-t2i-shiki-runtime"></script><script>{self._echarts_script()}</script><script>
 function shortISK(value){{const n=Math.abs(value);if(n>=1e9)return(value/1e9).toFixed(2)+'B';if(n>=1e6)return(value/1e6).toFixed(2)+'M';if(n>=1e3)return(value/1e3).toFixed(2)+'K';return Number(value).toFixed(2)}}
-const chart=echarts.init(document.getElementById('chart'),null,{{renderer:'canvas',devicePixelRatio:2}});const option={option_json};chart.setOption(option);window.__EVE_CHART_READY__=true;
+const chart=echarts.init(document.getElementById('chart'),null,{{renderer:'svg'}});const option={option_json};chart.setOption(option);window.__EVE_CHART_READY__=true;
 </script></body></html>"""
         return ChartMarkup(html_text)
 

@@ -1,8 +1,16 @@
 """框架事件适配与一致的异常回复，不包含查询、解析或监控逻辑。"""
 
+import asyncio
+import hashlib
+import time
 from collections.abc import Awaitable, Callable
+from pathlib import Path
 
 from astrbot.api import logger
+
+_CHART_RENDER_CACHE_SECONDS = 600
+_chart_render_cache: dict[str, tuple[float, str]] = {}
+_chart_render_flights: dict[str, asyncio.Task[str]] = {}
 
 
 def message_text(event) -> str:
@@ -23,6 +31,18 @@ def actor_id(event) -> str:
     sender_id = getattr(sender, "user_id", "")
     getter = getattr(event, "get_sender_id", None)
     return str(sender_id or (getter() if callable(getter) else ""))
+
+
+def prevent_default_reply(event) -> None:
+    """Keep a matched plugin command from falling through to AstrBot's default LLM."""
+    setter = getattr(event, "should_call_llm", None)
+    if callable(setter):
+        # Despite the historical method name, True marks this event as handled and
+        # makes ProcessStage skip its implicit/default agent request.
+        setter(True)
+    else:
+        # Compatibility with lightweight adapters and older AstrBot event objects.
+        event.call_llm = True
 
 
 async def query_result(event, label: str, query: Callable[..., Awaitable[str]], *args, **kwargs):
@@ -51,28 +71,70 @@ async def eve_query_results(
         return [event.plain_result(reply.text)]
     import astrbot.api.message_components as Comp
 
+    cache_key = hashlib.sha256(reply.chart_html.encode()).hexdigest()
     try:
-        rendered = await html_renderer(
-            reply.chart_html,
-            {},
-            options={"type": "png", "full_page": True, "omit_background": True},
-        )
+        rendered = await _render_chart(cache_key, reply.chart_html, html_renderer)
     except Exception:
         logger.exception("EVE HTML 走势图渲染失败，降级为文字回复")
         return [event.plain_result(reply.text)]
     if not rendered:
         return [event.plain_result(reply.text)]
-    rendered = str(rendered)
     image = (
         Comp.Image.fromURL(rendered)
         if rendered.startswith(("http://", "https://", "data:"))
         else Comp.Image.fromFileSystem(rendered)
     )
-    return [
-        event.chain_result(
-            [
-                Comp.Plain(reply.text),
-                image,
-            ]
-        )
-    ]
+    return [event.chain_result([Comp.Plain(reply.text), image])]
+
+
+async def _render_chart(
+    cache_key: str,
+    chart_html: str,
+    html_renderer: Callable[..., Awaitable[str]],
+) -> str:
+    cached = _chart_render_cache.get(cache_key)
+    rendered = cached[1] if cached and cached[0] > time.monotonic() else ""
+    if rendered and not rendered.startswith(("http://", "https://", "data:")):
+        if not Path(rendered).is_file():
+            rendered = ""
+    if rendered:
+        return rendered
+
+    task = _chart_render_flights.get(cache_key)
+    if task is None:
+        task = asyncio.create_task(_render_chart_once(cache_key, chart_html, html_renderer))
+        _chart_render_flights[cache_key] = task
+    try:
+        return await asyncio.shield(task)
+    finally:
+        if task.done() and _chart_render_flights.get(cache_key) is task:
+            _chart_render_flights.pop(cache_key, None)
+
+
+async def _render_chart_once(
+    cache_key: str,
+    chart_html: str,
+    html_renderer: Callable[..., Awaitable[str]],
+) -> str:
+    rendered = await html_renderer(
+        chart_html,
+        {},
+        # Download the rendered image to AstrBot's local temp directory.  Returning
+        # the public T2I URL makes the downstream platform fetch a short-lived URL
+        # itself; some OneBot deployments cannot reach it and silently drop the image.
+        return_url=False,
+        options={"type": "png", "full_page": True, "omit_background": True},
+    )
+    if not rendered:
+        return ""
+    rendered = str(rendered)
+    if len(_chart_render_cache) >= 128:
+        now = time.monotonic()
+        expired = [key for key, (expires, _) in _chart_render_cache.items() if expires <= now]
+        for key in expired or [next(iter(_chart_render_cache))]:
+            _chart_render_cache.pop(key, None)
+    _chart_render_cache[cache_key] = (
+        time.monotonic() + _CHART_RENDER_CACHE_SECONDS,
+        rendered,
+    )
+    return rendered

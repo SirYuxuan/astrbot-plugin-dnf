@@ -10,6 +10,7 @@ from .plugin.adapters.astrbot.commands import (
     eve_query_results,
     is_admin_event,
     message_text,
+    prevent_default_reply,
     query_result,
 )
 from .plugin.adapters.astrbot.notifications import AstrBotGroupNotifier
@@ -54,9 +55,12 @@ class DNF_Plugin(Star):
         """查询蛋价：蛋价 平舆 / 蛋价 平舆 20260911。"""
         yield await query_result(event, "蛋价", self.app.egg.query, message_text(event))
 
-    @filter.command("jita", alias={"jt"})
+    # Regex filters are not constrained by AstrBot's wake-prefix setting, so both
+    # `jita 加姆` and `/jt 加姆` consistently reach the plugin in groups and DMs.
+    @filter.regex(r"^/?(?:jita|jt)(?:\s+|$)")
     async def eve_market(self, event):
         """查询 EVE Tranquility 吉他市场；jt 为同义命令。"""
+        prevent_default_reply(event)
         results = await eve_query_results(
             event,
             self.app.eve.handle_reply,

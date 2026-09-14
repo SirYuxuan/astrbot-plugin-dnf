@@ -1,5 +1,6 @@
 """使用最小框架替身验证入口，不需要安装或启动 AstrBot。"""
 
+import asyncio
 import importlib
 import importlib.util
 import logging
@@ -46,14 +47,18 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
                 commands.append(name)
                 return lambda function: function
 
+            def regex(pattern):
+                commands.append(pattern)
+                return lambda function: function
+
             class Star:
                 def __init__(self, context):
                     self.context = context
 
-                async def html_render(self, template, data, options=None):
+                async def html_render(self, template, data, return_url=True, options=None):
                     return "https://example.test/chart.png"
 
-            modules["astrbot.api.event"].filter = SimpleNamespace(command=command)
+            modules["astrbot.api.event"].filter = SimpleNamespace(command=command, regex=regex)
             modules["astrbot.api.message_components"].Plain = lambda text: ("text", text)
             modules["astrbot.api.message_components"].Image = SimpleNamespace(
                 fromFileSystem=lambda path: ("image-file", path),
@@ -78,7 +83,10 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
                         SimpleNamespace(),
                         {name: {"monitor_enabled": False} for name in ("gold", "oil", "egg")},
                     )
-                    self.assertEqual(commands, ["金币比例", "油价", "蛋价", "jita"])
+                    self.assertEqual(
+                        commands,
+                        ["金币比例", "油价", "蛋价", r"^/?(?:jita|jt)(?:\s+|$)"],
+                    )
                     await plugin.initialize()
                     await plugin.initialize()
                     for method, feature in (
@@ -105,6 +113,7 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(
                         [item async for item in plugin.eve_market(event)], ["EVE 查询结果"]
                     )
+                    self.assertTrue(event.call_llm)
                     plugin.app.eve.handle_reply.assert_awaited_once_with(
                         "/jt PLEX * 500", is_admin=True, actor="42"
                     )
@@ -113,16 +122,41 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
                             text="EVE 查询结果", chart_html="<html>chart</html>"
                         )
                     )
+                    plugin.html_render = AsyncMock(return_value="https://example.test/chart.png")
                     event.chain_result = lambda chain: chain
+                    expected_chart_reply = [
+                        [
+                            ("text", "EVE 查询结果"),
+                            ("image-url", "https://example.test/chart.png"),
+                        ]
+                    ]
                     self.assertEqual(
                         [item async for item in plugin.eve_market(event)],
-                        [
-                            [
-                                ("text", "EVE 查询结果"),
-                                ("image-url", "https://example.test/chart.png"),
-                            ]
-                        ],
+                        expected_chart_reply,
                     )
+                    self.assertEqual(
+                        [item async for item in plugin.eve_market(event)], expected_chart_reply
+                    )
+                    plugin.html_render.assert_awaited_once()
+                    self.assertFalse(plugin.html_render.await_args.kwargs["return_url"])
+                    plugin.app.eve.handle_reply = AsyncMock(
+                        return_value=SimpleNamespace(
+                            text="并发查询", chart_html="<html>concurrent chart</html>"
+                        )
+                    )
+
+                    async def slow_render(*args, **kwargs):
+                        await asyncio.sleep(0.05)
+                        return "https://example.test/concurrent.png"
+
+                    plugin.html_render = AsyncMock(side_effect=slow_render)
+
+                    async def collect_eve_reply():
+                        return [item async for item in plugin.eve_market(event)]
+
+                    concurrent = await asyncio.gather(*(collect_eve_reply() for _ in range(6)))
+                    self.assertEqual(len(concurrent), 6)
+                    plugin.html_render.assert_awaited_once()
                     await plugin.terminate()
                     await plugin.terminate()
             finally:

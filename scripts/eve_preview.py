@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the EVE command feature locally with the real SDE and Tranquility ESI."""
+"""Run the EVE command feature locally with the real SDE and Fuzzwork market data."""
 
 from __future__ import annotations
 
@@ -22,8 +22,8 @@ from plugin.features.eve.catalog import EveCatalog  # noqa: E402
 from plugin.features.eve.chart import PriceChartRenderer  # noqa: E402
 from plugin.features.eve.client import (  # noqa: E402
     Adam4EveHistoryClient,
-    EsiMarketClient,
     EveMarketClient,
+    FuzzworkMarketClient,
     MemoryOrderCache,
     RedisOrderCache,
 )
@@ -55,14 +55,14 @@ class PreviewApp:
             if redis_url
             else MemoryOrderCache()
         )
-        esi = EsiMarketClient(
+        current_market = FuzzworkMarketClient(
             timeout=30,
             cache_seconds=300,
             user_agent=user_agent,
             cache=cache,
         )
         market = EveMarketClient(
-            esi,
+            current_market,
             Adam4EveHistoryClient(
                 timeout=30,
                 cache_seconds=21600,
