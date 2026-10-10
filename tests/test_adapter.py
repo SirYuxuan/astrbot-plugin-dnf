@@ -246,9 +246,7 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
                         platform_name="kook",
                         is_group=True,
                     )
-                    plugin.app.eve.handle_reply = AsyncMock(
-                        return_value=SimpleNamespace(text="EVE 查询结果", chart_html=None)
-                    )
+                    plugin.app.eve.handle = AsyncMock(return_value="EVE 查询结果")
                     event.message_str = "/jt PLEX * 500"
                     event.role = "admin"
                     event.sender = SimpleNamespace(user_id="42")
@@ -257,7 +255,7 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
                         [item async for item in plugin.eve_market(event)], ["EVE 查询结果"]
                     )
                     self.assertTrue(event.call_llm)
-                    plugin.app.eve.handle_reply.assert_awaited_once_with(
+                    plugin.app.eve.handle.assert_awaited_once_with(
                         "/jt PLEX * 500", is_admin=True, actor="42"
                     )
                     plugin.app.eve.handle_collection = AsyncMock(return_value="EVE 合计结果")
@@ -267,24 +265,6 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
                         ["EVE 合计结果"],
                     )
                     plugin.app.eve.handle_collection.assert_awaited_once_with("/col PLEX 500")
-                    plugin.app.eve.handle_reply = AsyncMock(
-                        return_value=SimpleNamespace(
-                            text="EVE 查询结果", chart_html="<html>chart</html>"
-                        )
-                    )
-                    plugin.html_render = AsyncMock(return_value="https://example.test/chart.png")
-                    event.chain_result = lambda chain: chain
-                    expected_chart_reply = [
-                        [("text", "EVE 查询结果"), ("image-url", "https://example.test/chart.png")]
-                    ]
-                    self.assertEqual(
-                        [item async for item in plugin.eve_market(event)],
-                        expected_chart_reply,
-                    )
-                    self.assertEqual(
-                        [item async for item in plugin.eve_market(event)], expected_chart_reply
-                    )
-                    plugin.html_render.assert_awaited_once()
                     await plugin.terminate()
                     await plugin.terminate()
             finally:

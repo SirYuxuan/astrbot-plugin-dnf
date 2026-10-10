@@ -58,8 +58,8 @@ core 不依赖 AstrBot 或任何具体功能
 5. 为查询、数据缺失、通知失败、状态提交及生命周期添加离线测试。
 
 EVE 查价功能是纯查询模块，不加入 `FeatureRuntime`。它在 `plugin/features/eve/` 内部分为名称目录、
-SDE 更新、行情/Redis 缓存、走势图生成和命令业务，通过 `PluginApplication` 显式装配。
-AstrBot 命令适配层负责将生成的 HTML 渲染为图片并发送；历史行情或图片渲染失败时退回文字价格。
+SDE 更新、行情/Redis 缓存和命令业务，通过 `PluginApplication` 显式装配。
+`/jt`、`/jita` 只查询当前行情并回复文字，不生成或发送走势图图片。
 
 KB 订阅的状态、实时流及通知调度留在 `kb_watch/service.py`；战报文字和 KOOK 卡片由
 `kb_watch/formatter.py` 生成。新增通知样式时先在格式化模块处理，不把卡片构造逻辑放回监控循环。

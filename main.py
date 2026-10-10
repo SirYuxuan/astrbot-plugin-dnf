@@ -7,7 +7,6 @@ from astrbot.api.star import Context, Star, StarTools, register
 
 from .plugin.adapters.astrbot.commands import (
     actor_id,
-    eve_query_results,
     html_card_result,
     is_admin_event,
     is_group_event,
@@ -182,16 +181,14 @@ class DNF_Plugin(Star):
     async def eve_market(self, event):
         """查询 EVE Tranquility 吉他市场；jt 为同义命令。"""
         prevent_default_reply(event)
-        results = await eve_query_results(
+        yield await query_result(
             event,
-            self.app.eve.handle_reply,
+            "EVE 市场",
+            self.app.eve.handle,
             message_text(event),
-            html_renderer=self.html_render,
             is_admin=is_admin_event(event),
             actor=actor_id(event),
         )
-        for result in results:
-            yield result
 
     @filter.command("col")
     async def eve_collection(self, event):
