@@ -51,6 +51,8 @@ class ConfigTests(unittest.TestCase):
                 "info",
                 "translate",
                 "navigation",
+                "where",
+                "fleet",
                 "ship",
                 "ship_training",
                 "eve_dt",

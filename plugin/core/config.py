@@ -40,6 +40,14 @@ DEFAULT_CONFIG = {
         "url": "https://admin-api.oofo.cc/game/eve/public/users/by-qq/{qq}/waypoint",
         "request_timeout_seconds": 15,
     },
+    "where": {
+        "url": "https://admin-api.oofo.cc/game/eve/public/users/by-qq/{qq}/assets/search",
+        "request_timeout_seconds": 15,
+    },
+    "fleet": {
+        "url": "https://admin-api.oofo.cc/game/eve/public/users/by-qq/{qq}/fleet/invitations",
+        "request_timeout_seconds": 30,
+    },
     "ship": {
         "info_url": "https://admin-api.oofo.cc/game/eve/public/ships/info",
         "image_url": "https://admin-api.oofo.cc/game/eve/assets/types/{type_id}/icon",

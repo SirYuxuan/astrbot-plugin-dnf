@@ -17,6 +17,10 @@ class HelpFeature:
         "翻译 EVE 中英文名称（可用 kind=type 筛选）\n"
         "/nav ALL 吉他\n"
         '为绑定角色设置导航；指定角色可写 /nav "角色名" 星系\n'
+        "/where 乌鸦级\n"
+        "按 QQ 搜索已同步的资产位置和数量\n"
+        '/fleet "主角色名" ALL\n'
+        "由已在舰队的主角色邀请同 QQ 下其他角色，也可指定目标角色名\n"
         "/kb Yuxan Axiom\n"
         "查询角色 zKillboard 战绩\n"
         "/timer 2天2小时5分\n"

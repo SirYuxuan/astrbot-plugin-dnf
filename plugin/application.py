@@ -18,6 +18,8 @@ from .features.eve.sde import SdeUpdater
 from .features.eve.service import EveFeature
 from .features.eve_dt.client import EveStatusClient
 from .features.eve_dt.service import EveDowntimeFeature
+from .features.fleet.client import FleetInviteClient
+from .features.fleet.service import FleetFeature
 from .features.gold.service import GoldFeature
 from .features.help.service import HelpFeature
 from .features.info.client import InfoClient
@@ -38,6 +40,8 @@ from .features.ship_training.service import ShipTrainingFeature
 from .features.timer.service import TimerFeature
 from .features.translate.client import TranslateClient
 from .features.translate.service import TranslateFeature
+from .features.where.client import AssetSearchClient
+from .features.where.service import WhereFeature
 
 
 class PluginApplication:
@@ -68,6 +72,18 @@ class PluginApplication:
             WaypointClient(
                 url=str(config.get("navigation.url", WaypointClient.DEFAULT_URL)),
                 timeout=int(config.get("navigation.request_timeout_seconds", 15)),
+            )
+        )
+        self.where = WhereFeature(
+            AssetSearchClient(
+                url=str(config.get("where.url", AssetSearchClient.DEFAULT_URL)),
+                timeout=int(config.get("where.request_timeout_seconds", 15)),
+            )
+        )
+        self.fleet = FleetFeature(
+            FleetInviteClient(
+                url=str(config.get("fleet.url", FleetInviteClient.DEFAULT_URL)),
+                timeout=int(config.get("fleet.request_timeout_seconds", 30)),
             )
         )
         self.timer = TimerFeature()

@@ -106,6 +106,20 @@ class DNF_Plugin(Star):
             actor_id(event),
         )
 
+    @filter.command("where")
+    async def where(self, event):
+        """按发送者 QQ 搜索已同步的 EVE 资产。"""
+        yield await query_result(
+            event, "资产位置", self.app.where.query, message_text(event), actor_id(event)
+        )
+
+    @filter.command("fleet")
+    async def fleet(self, event):
+        """使用 QQ 绑定的主角色发送舰队邀请。"""
+        yield await query_result(
+            event, "舰队邀请", self.app.fleet.query, message_text(event), actor_id(event)
+        )
+
     @filter.command("timer")
     async def timer(self, event):
         """计算指定时长后的 EVE 时间和北京时间。"""

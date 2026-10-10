@@ -189,6 +189,44 @@
       }
     }
   },
+  "where": {
+    "description": "EVE 资产位置查询",
+    "hint": "按发送者 QQ 搜索已同步的角色资产。",
+    "type": "object",
+    "items": {
+      "url": {
+        "description": "接口地址",
+        "hint": "{qq} 会替换为发送者 QQ。",
+        "type": "string",
+        "default": "https://admin-api.oofo.cc/game/eve/public/users/by-qq/{qq}/assets/search"
+      },
+      "request_timeout_seconds": {
+        "description": "请求超时",
+        "hint": "资产查询接口单次请求超时秒数。",
+        "type": "int",
+        "default": 15
+      }
+    }
+  },
+  "fleet": {
+    "description": "EVE 舰队邀请",
+    "hint": "按发送者 QQ 使用已授权主角色邀请目标角色。",
+    "type": "object",
+    "items": {
+      "url": {
+        "description": "接口地址",
+        "hint": "{qq} 会替换为发送者 QQ。",
+        "type": "string",
+        "default": "https://admin-api.oofo.cc/game/eve/public/users/by-qq/{qq}/fleet/invitations"
+      },
+      "request_timeout_seconds": {
+        "description": "请求超时",
+        "hint": "舰队邀请接口单次请求超时秒数。",
+        "type": "int",
+        "default": 30
+      }
+    }
+  },
   "ship_training": {
     "description": "EVE 舰船训练查询",
     "hint": "使用发送者 QQ 查询绑定角色的舰船立即训练时间。",
