@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 class KbWatchFeature(MonitorFeature):
     name = "kb_watch"
+    YUXAN_LOSS_RECIPIENT = 1718018032
 
     def __init__(self, config, store, notifier, client: ZkillLiveClient, catalog: EveCatalog):
         super().__init__(config, store, notifier)
@@ -134,20 +135,27 @@ class KbWatchFeature(MonitorFeature):
             return
         corporation_event = self._event_type(package)
         alliance_event = self._alliance_event_type(package)
+        restricted_loss = await asyncio.to_thread(
+            self._is_restricted_loss, package, corporation_event, alliance_event
+        )
         matched = False
-        if corporation_event and self.subscribers:
+        private_event = (corporation_event or alliance_event) if restricted_loss else corporation_event
+        recipients = (
+            [self.YUXAN_LOSS_RECIPIENT] if restricted_loss else self.subscribers
+        )
+        if private_event and recipients:
             matched = True
             message = await asyncio.to_thread(
-                self._formatter().format_text, package, corporation_event
+                self._formatter().format_text, package, private_event
             )
-            for user_id in self.subscribers:
+            for user_id in recipients:
                 try:
                     sent = await self.notifier.send_private(user_id, message)
                     if not sent:
                         logger.warning("KB 私聊推送平台不可用: qq=%s", user_id)
                 except Exception:
                     logger.exception("KB 私聊推送失败: qq=%s", user_id)
-        if alliance_event and self.alliance_sessions:
+        if alliance_event and self.alliance_sessions and not restricted_loss:
             matched = True
             card = await asyncio.to_thread(self._formatter().format_card, package, alliance_event)
             fallback = None
@@ -177,6 +185,27 @@ class KbWatchFeature(MonitorFeature):
         seen = (self._seen_ids() + [killmail_id])[-500:]
         self.state["seen_killmail_ids"] = seen
         self._save_state()
+
+    def _is_restricted_loss(
+        self,
+        package: dict[str, Any],
+        corporation_event: str | None,
+        alliance_event: str | None,
+    ) -> bool:
+        event_types = (corporation_event, alliance_event)
+        if not any(event and "损失" in event for event in event_types):
+            return False
+        esi = package.get("esi")
+        victim = esi.get("victim") if isinstance(esi, dict) else None
+        if not isinstance(victim, dict):
+            return False
+        character_id = self._integer(victim.get("character_id"))
+        if character_id <= 0:
+            return False
+        name = self.client.names([character_id]).get(character_id)
+        if not name:
+            raise ValueError(f"无法解析 KB 损失角色名: character_id={character_id}")
+        return str(name).strip().casefold().startswith("yuxan")
 
     def _event_type(self, package: dict[str, Any]) -> str | None:
         return self._event_type_for(
