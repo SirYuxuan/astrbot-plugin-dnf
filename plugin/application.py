@@ -26,6 +26,8 @@ from .features.kb.client import KbClient
 from .features.kb.service import KbFeature
 from .features.kb_watch.client import ZkillLiveClient
 from .features.kb_watch.service import KbWatchFeature
+from .features.navigation.client import WaypointClient
+from .features.navigation.service import NavigationFeature
 from .features.oil.service import OilFeature
 from .features.rat.client import RatClient
 from .features.rat.service import RatFeature
@@ -60,6 +62,12 @@ class PluginApplication:
             TranslateClient(
                 url=str(config.get("translate.url", TranslateClient.DEFAULT_URL)),
                 timeout=int(config.get("translate.request_timeout_seconds", 10)),
+            )
+        )
+        self.navigation = NavigationFeature(
+            WaypointClient(
+                url=str(config.get("navigation.url", WaypointClient.DEFAULT_URL)),
+                timeout=int(config.get("navigation.request_timeout_seconds", 15)),
             )
         )
         self.timer = TimerFeature()

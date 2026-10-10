@@ -15,6 +15,8 @@ class HelpFeature:
         "查询 EVE 绑定信息（需在管理系统注册）\n"
         "/tr raven\n"
         "翻译 EVE 中英文名称（可用 kind=type 筛选）\n"
+        "/nav ALL 吉他\n"
+        '为绑定角色设置导航；指定角色可写 /nav "角色名" 星系\n'
         "/kb Yuxan Axiom\n"
         "查询角色 zKillboard 战绩\n"
         "/timer 2天2小时5分\n"

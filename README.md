@@ -21,6 +21,7 @@
 | EVE 查价 | `/jt 毒蜥级` | `jita` 与 `jt` 完全等价，普通物品查吉他 4-4 |
 | EVE 英文查价 | `/jita Gila` | 支持中文、英文和物品 ID |
 | EVE 名称翻译 | `/tr raven` | 自动识别中英文；重名时列出候选与 ID，可用 `kind=type` 筛选 |
+| EVE 导航 | `/nav ALL 吉他` | 为发送者 QQ 绑定的全部授权角色设置航点；指定角色可用 `/nav "角色名" 吉他` |
 | PLEX | `/jt PLEX` | PLEX/伊甸币查询全球 PLEX 市场 |
 | EVE 合计查价 | `/col 中级水晶` | 查询一个或多个匹配物品，并汇总最低卖价；也支持末尾数量 |
 | KB 战绩 | `/kb Yuxan Axiom` | 按完整角色名查询 zKillboard 公开战绩 |
@@ -45,6 +46,7 @@ AstrBot WebUI 根据 `_conf_schema.json` 生成配置页面。现有基础配置
 - `kb`：zKillboard 请求超时、缓存时间、接口地址和 User-Agent。
 - `kb_watch`：军团/联盟 ID、默认订阅 QQ 列表和 zKillboard R2Z2 实时流配置。
 - `translate`：EVE 名称翻译接口地址和请求超时。
+- `navigation`：EVE 航点接口地址和请求超时。
 - `ship`：舰船资料、图标接口和请求超时。
 - `eve`：候选结果数量、Fuzzwork/SDE/Adam4EVE 请求超时、行情缓存、Redis 地址和 User-Agent。
 
@@ -56,6 +58,11 @@ ISK/舰船击损比和 zKillboard 详情链接。角色名通过 CCP ESI 精确�
 返回的 `typeId` 获取实际舰船 PNG。图片会嵌入 HTML 后交给 AstrBot 截图并发送。
 本地预览可运行 `uv run python scripts/ship_preview.py`，打开
 `http://127.0.0.1:8766/eve-ship-card-preview.html`，输入舰船名称即可实时查询。
+
+`/nav` 使用消息发送者的 QQ 绑定信息；`ALL`（不区分大小写）会为所有授权角色设置航点。
+角色名或星系名含空格时使用英文引号，例如 `/nav "Yuxan Axiom" "New Caldari"`。
+目的地可用星系中文名、英文名或 ID。角色须已授权 `esi-ui.write_waypoint.v1`，游戏客户端须在线；
+回复会逐角色列出成功或失败原因。
 
 ### EVE 初始化与命令
 

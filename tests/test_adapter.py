@@ -132,6 +132,7 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
                             "rat",
                             "info",
                             "tr",
+                            "nav",
                             "timer",
                             "ship",
                             "train",

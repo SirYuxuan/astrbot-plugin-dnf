@@ -95,6 +95,17 @@ class DNF_Plugin(Star):
             event, "EVE 名称翻译", self.app.translate.query, message_text(event)
         )
 
+    @filter.command("nav")
+    async def navigation(self, event):
+        """为当前 QQ 绑定的 EVE 角色设置目的地航点。"""
+        yield await query_result(
+            event,
+            "EVE 导航",
+            self.app.navigation.query,
+            message_text(event),
+            actor_id(event),
+        )
+
     @filter.command("timer")
     async def timer(self, event):
         """计算指定时长后的 EVE 时间和北京时间。"""

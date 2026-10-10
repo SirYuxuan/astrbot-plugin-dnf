@@ -36,6 +36,10 @@ DEFAULT_CONFIG = {
         "url": "https://admin-api.oofo.cc/game/eve/public/translate",
         "request_timeout_seconds": 10,
     },
+    "navigation": {
+        "url": "https://admin-api.oofo.cc/game/eve/public/users/by-qq/{qq}/waypoint",
+        "request_timeout_seconds": 15,
+    },
     "ship": {
         "info_url": "https://admin-api.oofo.cc/game/eve/public/ships/info",
         "image_url": "https://admin-api.oofo.cc/game/eve/assets/types/{type_id}/icon",
