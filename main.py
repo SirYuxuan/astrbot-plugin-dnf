@@ -87,7 +87,7 @@ class DNF_Plugin(Star):
             event, "info", self.app.info.query, actor_id(event), error_text=EVE_BINDING_HINT
         )
 
-    @filter.regex(r"^/?tr(?:\s+|$)")
+    @filter.command("tr")
     async def translate(self, event):
         """翻译 EVE 中文或英文名称。"""
         prevent_default_reply(event)
@@ -100,7 +100,7 @@ class DNF_Plugin(Star):
         """计算指定时长后的 EVE 时间和北京时间。"""
         yield await query_result(event, "timer", self.app.timer.query, message_text(event))
 
-    @filter.regex(r"^/?(?:ship|舰船)(?:\s+|$)")
+    @filter.command("ship", alias={"舰船"})
     async def ship(self, event):
         """查询 EVE 舰船槽位和加成，并返回图片卡片。"""
         prevent_default_reply(event)
@@ -112,7 +112,7 @@ class DNF_Plugin(Star):
             html_renderer=self.html_render,
         )
 
-    @filter.regex(r"^/?train(?:\s+|$)")
+    @filter.command("train")
     async def ship_training(self, event):
         """查询发送者绑定角色驾驶舰船所需的立即训练时间。"""
         prevent_default_reply(event)
@@ -153,9 +153,7 @@ class DNF_Plugin(Star):
             is_group=is_group_event(event),
         )
 
-    # Regex filters are not constrained by AstrBot's wake-prefix setting, so commands
-    # with or without a leading slash consistently reach the plugin in groups and DMs.
-    @filter.regex(r"^/?(?:jita|jt)(?:\s+|$)")
+    @filter.command("jita", alias={"jt"})
     async def eve_market(self, event):
         """查询 EVE Tranquility 吉他市场；jt 为同义命令。"""
         prevent_default_reply(event)
@@ -170,7 +168,7 @@ class DNF_Plugin(Star):
         for result in results:
             yield result
 
-    @filter.regex(r"^/?col(?:\s+|$)")
+    @filter.command("col")
     async def eve_collection(self, event):
         """按物品和数量查询 EVE 市场单价及最低卖价合计。"""
         prevent_default_reply(event)
