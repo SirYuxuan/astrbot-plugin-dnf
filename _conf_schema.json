@@ -114,8 +114,8 @@
     }
   },
   "rat": {
-    "description": "RAT 用户查询",
-    "hint": "根据指令发送者的 QQ 调用远端接口。",
+    "description": "RAT 查询与订阅",
+    "hint": "按发送者 QQ 查询；订阅后每天北京时间 23:50 私聊推送。",
     "type": "object",
     "items": {
       "url": {
@@ -129,6 +129,12 @@
         "hint": "RAT 接口单次请求超时秒数。",
         "type": "int",
         "default": 10
+      },
+      "subscription_enabled": {
+        "description": "启用 RAT 每日推送",
+        "hint": "关闭后保留订阅名单，但暂停每天 23:50 的私聊推送。",
+        "type": "bool",
+        "default": true
       }
     }
   },

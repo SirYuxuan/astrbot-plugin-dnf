@@ -27,6 +27,7 @@ DEFAULT_CONFIG = {
     "rat": {
         "url": "https://admin-api.oofo.cc/game/eve/public/users/by-qq/{qq}/ratting-report",
         "request_timeout_seconds": 10,
+        "subscription_enabled": True,
     },
     "info": {
         "url": "https://admin-api.oofo.cc/game/eve/public/users/by-qq/{qq}/info",

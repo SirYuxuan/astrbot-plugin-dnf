@@ -130,6 +130,7 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
                             "油价",
                             "蛋价",
                             "rat",
+                            "subrat",
                             "info",
                             "tr",
                             "nav",

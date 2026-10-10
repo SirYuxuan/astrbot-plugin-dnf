@@ -79,6 +79,13 @@ class DNF_Plugin(Star):
             event, "rat", self.app.rat.query, actor_id(event), error_text=EVE_BINDING_HINT
         )
 
+    @filter.command("subrat")
+    async def subrat(self, event):
+        """切换每日 23:50 的 RAT 私聊订阅。"""
+        yield await query_result(
+            event, "RAT 订阅", self.app.rat_subscription.toggle, actor_id(event)
+        )
+
     @filter.command("info")
     async def info(self, event):
         """使用发送者 QQ 查询绑定的 EVE 用户信息。"""
@@ -151,7 +158,7 @@ class DNF_Plugin(Star):
 
     @filter.command("kb")
     async def kb(self, event):
-        """按角色名查询 zKillboard 战绩。"""
+        """按角色、军团或联盟名称查询 zKillboard 战绩。"""
         yield await query_result(event, "KB", self.app.kb.query, message_text(event))
 
     @filter.command("subkb")

@@ -16,29 +16,53 @@ class KbFeature:
         self.client = client
 
     async def query(self, message: str) -> str:
-        character_name = re.sub(r"^/?kb(?:\s+|$)", "", message.strip(), count=1).strip()
-        if not character_name:
-            return "用法：/kb 角色名\n示例：/kb Yuxan Axiom"
-        if len(character_name) > 100:
-            return "角色名过长，请检查后重试"
+        query = re.sub(r"^/?kb(?:\s+|$)", "", message.strip(), count=1).strip()
+        if not query:
+            return "用法：/kb 角色名｜/kb 军团 军团名｜/kb 联盟 联盟名"
+        entity_type = "character"
+        kinds = {
+            "军团": "corporation",
+            "corporation": "corporation",
+            "联盟": "alliance",
+            "alliance": "alliance",
+            "角色": "character",
+            "character": "character",
+        }
+        parts = query.split(maxsplit=1)
+        prefix, name = parts[0], parts[1] if len(parts) > 1 else ""
+        if prefix.casefold() in kinds:
+            if not name.strip():
+                return f"请在 {prefix} 后输入完整名称"
+            entity_type = kinds[prefix.casefold()]
+            query = name.strip()
+        if len(query) > 100:
+            return "名称过长，请检查后重试"
         try:
-            report = await asyncio.to_thread(self.client.query, character_name)
+            if entity_type == "character":
+                report = await asyncio.to_thread(self.client.query, query)
+            else:
+                report = await asyncio.to_thread(self.client.query_entity, entity_type, query)
         except (requests.RequestException, ValueError):
-            logger.exception("KB 查询上游接口异常: character=%s", character_name)
+            logger.exception("KB 查询上游接口异常: type=%s name=%s", entity_type, query)
             return "KB查询失败，请稍后重试"
         if report is None:
-            return f"未找到角色：{character_name}\n请检查角色名是否完整，角色名支持空格。"
+            label = {"character": "角色", "corporation": "军团", "alliance": "联盟"}[entity_type]
+            return f"未找到{label}：{query}\n请检查名称是否完整，名称支持空格。"
         return self.format_report(report)
 
     @classmethod
     def format_report(cls, report: KbReport) -> str:
-        detail_url = f"https://zkillboard.com/character/{report.character_id}/"
+        label = {"character": "角色", "corporation": "军团", "alliance": "联盟"}[
+            report.entity_type
+        ]
+        title = "KB 查询" if report.entity_type == "character" else f"{label} KB"
+        detail_url = f"https://zkillboard.com/{report.entity_type}/{report.character_id}/"
         if not report.has_activity:
             return (
-                f"【KB 查询】{report.character_name}\n"
-                f"该角色暂无公开的击杀或损失记录。\n详情：{detail_url}"
+                f"【{title}】{report.character_name}\n"
+                f"该{label}暂无公开的击杀或损失记录。\n详情：{detail_url}"
             )
-        lines = [f"【KB 查询】{report.character_name}"]
+        lines = [f"【{title}】{report.character_name}"]
         if report.corporation_name:
             lines.append(f"军团：{report.corporation_name}")
         if report.alliance_name:

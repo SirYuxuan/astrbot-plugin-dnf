@@ -23,6 +23,7 @@ class KbReport:
     isk_lost: float
     solo_kills: int
     solo_losses: int
+    entity_type: str = "character"
 
     @property
     def has_activity(self) -> bool:
@@ -33,6 +34,7 @@ class KbClient:
     ESI_IDS_URL = "https://esi.evetech.net/latest/universe/ids/"
     ESI_NAMES_URL = "https://esi.evetech.net/latest/universe/names/"
     ZKILL_STATS_URL = "https://zkillboard.com/api/stats/characterID/{character_id}/kills/"
+    ZKILL_ENTITY_STATS_URL = "https://zkillboard.com/api/stats/{entity_type}/{entity_id}/kills/"
 
     def __init__(
         self,
@@ -43,6 +45,7 @@ class KbClient:
         esi_ids_url: str = ESI_IDS_URL,
         esi_names_url: str = ESI_NAMES_URL,
         zkill_stats_url: str = ZKILL_STATS_URL,
+        zkill_entity_stats_url: str = ZKILL_ENTITY_STATS_URL,
     ) -> None:
         self.timeout = max(1, timeout)
         self.cache_seconds = max(60, cache_seconds)
@@ -53,55 +56,77 @@ class KbClient:
         self.esi_ids_url = esi_ids_url
         self.esi_names_url = esi_names_url
         self.zkill_stats_url = zkill_stats_url
+        self.zkill_entity_stats_url = zkill_entity_stats_url
         self._cache: dict[str, tuple[float, KbReport | None]] = {}
         self._cache_lock = threading.Lock()
 
     def query(self, character_name: str) -> KbReport | None:
-        cache_key = character_name.strip().casefold()
+        return self.query_entity("character", character_name)
+
+    def query_entity(self, entity_type: str, entity_name: str) -> KbReport | None:
+        if entity_type not in {"character", "corporation", "alliance"}:
+            raise ValueError("不支持的 KB 实体类型")
+        cache_key = f"{entity_type}:{entity_name.strip().casefold()}"
         now = time.monotonic()
         with self._cache_lock:
             cached = self._cache.get(cache_key)
             if cached and cached[0] > now:
                 return cached[1]
 
-        identity = self._resolve_character(character_name.strip())
+        identity = self._resolve_entity(entity_type, entity_name.strip())
         if identity is None:
             report = None
         else:
-            character_id, resolved_name = identity
-            stats = self._fetch_stats(character_id)
-            report = self._build_report(character_id, resolved_name, stats)
+            entity_id, resolved_name = identity
+            stats = self._fetch_stats(entity_id, entity_type)
+            report = self._build_report(entity_id, resolved_name, stats, entity_type)
 
         with self._cache_lock:
             self._cache[cache_key] = (now + self.cache_seconds, report)
         return report
 
     def _resolve_character(self, character_name: str) -> tuple[int, str] | None:
+        return self._resolve_entity("character", character_name)
+
+    def _resolve_entity(self, entity_type: str, entity_name: str) -> tuple[int, str] | None:
         response = requests.post(
             self.esi_ids_url,
             params={"datasource": "tranquility", "language": "en"},
-            json=[character_name],
+            json=[entity_name],
             headers=self.headers,
             timeout=self.timeout,
         )
         response.raise_for_status()
         payload = response.json()
-        characters = payload.get("characters", []) if isinstance(payload, dict) else []
-        for character in characters:
-            if not isinstance(character, dict):
+        category = {
+            "character": "characters",
+            "corporation": "corporations",
+            "alliance": "alliances",
+        }[entity_type]
+        entities = payload.get(category, []) if isinstance(payload, dict) else []
+        for entity in entities:
+            if not isinstance(entity, dict):
                 continue
-            name = str(character.get("name", "")).strip()
-            if name.casefold() != character_name.casefold():
+            name = str(entity.get("name", "")).strip()
+            if name.casefold() != entity_name.casefold():
                 continue
             try:
-                return int(character["id"]), name
+                return int(entity["id"]), name
             except (KeyError, TypeError, ValueError):
                 continue
         return None
 
-    def _fetch_stats(self, character_id: int) -> dict[str, Any]:
+    def _fetch_stats(self, character_id: int, entity_type: str = "character") -> dict[str, Any]:
+        url = (
+            self.zkill_stats_url.format(character_id=character_id)
+            if entity_type == "character"
+            else self.zkill_entity_stats_url.format(
+                entity_type={"corporation": "corporationID", "alliance": "allianceID"}[entity_type],
+                entity_id=character_id,
+            )
+        )
         response = requests.get(
-            self.zkill_stats_url.format(character_id=character_id),
+            url,
             headers=self.headers,
             timeout=self.timeout,
         )
@@ -114,13 +139,21 @@ class KbClient:
         return payload
 
     def _build_report(
-        self, character_id: int, character_name: str, stats: dict[str, Any]
+        self, character_id: int, character_name: str, stats: dict[str, Any],
+        entity_type: str = "character",
     ) -> KbReport:
         info = stats.get("info") if isinstance(stats.get("info"), dict) else {}
         corporation_id = self._positive_int(info.get("corporationID") or info.get("corporation_id"))
         alliance_id = self._positive_int(info.get("allianceID") or info.get("alliance_id"))
-        names = self._resolve_names([value for value in (corporation_id, alliance_id) if value])
-        security_status = self._optional_float(info.get("security_status", info.get("secStatus")))
+        names = (
+            self._resolve_names([value for value in (corporation_id, alliance_id) if value])
+            if entity_type == "character"
+            else {}
+        )
+        security_status = (
+            self._optional_float(info.get("security_status", info.get("secStatus")))
+            if entity_type == "character" else None
+        )
         return KbReport(
             character_id=character_id,
             character_name=str(info.get("name") or character_name),
@@ -135,6 +168,7 @@ class KbClient:
             isk_lost=self._number(stats.get("iskLost")),
             solo_kills=self._integer(stats.get("soloKills")),
             solo_losses=self._integer(stats.get("soloLosses")),
+            entity_type=entity_type,
         )
 
     def _resolve_names(self, entity_ids: list[int]) -> dict[int, str]:

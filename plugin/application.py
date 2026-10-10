@@ -32,7 +32,7 @@ from .features.navigation.client import WaypointClient
 from .features.navigation.service import NavigationFeature
 from .features.oil.service import OilFeature
 from .features.rat.client import RatClient
-from .features.rat.service import RatFeature
+from .features.rat.service import RatFeature, RatSubscriptionFeature
 from .features.ship.client import ShipClient
 from .features.ship.renderer import ShipCardRenderer
 from .features.ship.service import ShipFeature
@@ -56,6 +56,7 @@ class PluginApplication:
                 timeout=int(config.get("rat.request_timeout_seconds", 10)),
             )
         )
+        self.rat_subscription = RatSubscriptionFeature(config, store, notifier, self.rat)
         self.info = InfoFeature(
             InfoClient(
                 url=str(config.get("info.url", InfoClient.DEFAULT_URL)),
@@ -188,4 +189,6 @@ class PluginApplication:
             ),
             catalog,
         )
-        self.runtime = FeatureRuntime((self.gold, self.oil, self.egg, self.eve_dt, self.kb_watch))
+        self.runtime = FeatureRuntime(
+            (self.gold, self.oil, self.egg, self.eve_dt, self.kb_watch, self.rat_subscription)
+        )

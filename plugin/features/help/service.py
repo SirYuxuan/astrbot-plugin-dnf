@@ -11,6 +11,8 @@ class HelpFeature:
         "查询 DNF 金币比例\n"
         "/rat\n"
         "查询刷怪、纳税及净收入（需在管理系统注册）\n"
+        "/subrat\n"
+        "订阅或取消每天 23:50 的 RAT 私聊报告\n"
         "/info\n"
         "查询 EVE 绑定信息（需在管理系统注册）\n"
         "/tr raven\n"
@@ -22,7 +24,7 @@ class HelpFeature:
         '/fleet "主角色名" ALL\n'
         "由已在舰队的主角色邀请同 QQ 下其他角色，也可指定目标角色名\n"
         "/kb Yuxan Axiom\n"
-        "查询角色 zKillboard 战绩\n"
+        "查询角色 zKillboard 战绩；军团或联盟可用 /kb 军团 名称、/kb 联盟 名称\n"
         "/timer 2天2小时5分\n"
         "计算指定时长后的 EVE 时间和北京时间\n"
         "/status\n"
