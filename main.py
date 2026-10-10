@@ -87,6 +87,14 @@ class DNF_Plugin(Star):
             event, "info", self.app.info.query, actor_id(event), error_text=EVE_BINDING_HINT
         )
 
+    @filter.regex(r"^/?tr(?:\s+|$)")
+    async def translate(self, event):
+        """翻译 EVE 中文或英文名称。"""
+        prevent_default_reply(event)
+        yield await query_result(
+            event, "EVE 名称翻译", self.app.translate.query, message_text(event)
+        )
+
     @filter.command("timer")
     async def timer(self, event):
         """计算指定时长后的 EVE 时间和北京时间。"""

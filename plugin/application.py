@@ -34,6 +34,8 @@ from .features.ship.renderer import ShipCardRenderer
 from .features.ship.service import ShipFeature
 from .features.ship_training.service import ShipTrainingFeature
 from .features.timer.service import TimerFeature
+from .features.translate.client import TranslateClient
+from .features.translate.service import TranslateFeature
 
 
 class PluginApplication:
@@ -52,6 +54,12 @@ class PluginApplication:
             InfoClient(
                 url=str(config.get("info.url", InfoClient.DEFAULT_URL)),
                 timeout=int(config.get("info.request_timeout_seconds", 10)),
+            )
+        )
+        self.translate = TranslateFeature(
+            TranslateClient(
+                url=str(config.get("translate.url", TranslateClient.DEFAULT_URL)),
+                timeout=int(config.get("translate.request_timeout_seconds", 10)),
             )
         )
         self.timer = TimerFeature()

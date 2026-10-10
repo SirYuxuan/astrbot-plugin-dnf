@@ -13,6 +13,8 @@ class HelpFeature:
         "查询刷怪、纳税及净收入（需在管理系统注册）\n"
         "/info\n"
         "查询 EVE 绑定信息（需在管理系统注册）\n"
+        "/tr raven\n"
+        "翻译 EVE 中英文名称（可用 kind=type 筛选）\n"
         "/kb Yuxan Axiom\n"
         "查询角色 zKillboard 战绩\n"
         "/timer 2天2小时5分\n"

@@ -18,6 +18,7 @@
 | EVE 角色信息 | `/info` | 查询发送者绑定的 EVE 角色信息 |
 | EVE 查价 | `/jt 毒蜥级` | `jita` 与 `jt` 完全等价，普通物品查吉他 4-4 |
 | EVE 英文查价 | `/jita Gila` | 支持中文、英文和物品 ID |
+| EVE 名称翻译 | `/tr raven` | 自动识别中英文；重名时列出候选与 ID，可用 `kind=type` 筛选 |
 | PLEX | `/jt PLEX` | PLEX/伊甸币查询全球 PLEX 市场 |
 | EVE 合计查价 | `/col 中级水晶` | 查询一个或多个匹配物品，并汇总最低卖价；也支持末尾数量 |
 | KB 战绩 | `/kb Yuxan Axiom` | 按完整角色名查询 zKillboard 公开战绩 |
@@ -41,6 +42,7 @@ AstrBot WebUI 根据 `_conf_schema.json` 生成配置页面。现有基础配置
 - `eve_dt`：EVE 每日 DT 提醒开关、推送群号、开服检测间隔和 ESI 状态地址。
 - `kb`：zKillboard 请求超时、缓存时间、接口地址和 User-Agent。
 - `kb_watch`：军团/联盟 ID、默认订阅 QQ 列表和 zKillboard R2Z2 实时流配置。
+- `translate`：EVE 名称翻译接口地址和请求超时。
 - `ship`：舰船资料、图标接口和请求超时。
 - `eve`：候选结果数量、Fuzzwork/SDE/Adam4EVE 请求超时、行情缓存、Redis 地址和 User-Agent。
 

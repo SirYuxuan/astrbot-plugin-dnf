@@ -49,6 +49,7 @@ class ConfigTests(unittest.TestCase):
                 "egg",
                 "rat",
                 "info",
+                "translate",
                 "ship",
                 "ship_training",
                 "eve_dt",

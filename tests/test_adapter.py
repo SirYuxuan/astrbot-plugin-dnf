@@ -131,6 +131,7 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
                             "蛋价",
                             "rat",
                             "info",
+                            r"^/?tr(?:\s+|$)",
                             "timer",
                             r"^/?(?:ship|舰船)(?:\s+|$)",
                             r"^/?train(?:\s+|$)",

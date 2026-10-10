@@ -32,6 +32,10 @@ DEFAULT_CONFIG = {
         "url": "https://admin-api.oofo.cc/game/eve/public/users/by-qq/{qq}/info",
         "request_timeout_seconds": 10,
     },
+    "translate": {
+        "url": "https://admin-api.oofo.cc/game/eve/public/translate",
+        "request_timeout_seconds": 10,
+    },
     "ship": {
         "info_url": "https://admin-api.oofo.cc/game/eve/public/ships/info",
         "image_url": "https://admin-api.oofo.cc/game/eve/assets/types/{type_id}/icon",

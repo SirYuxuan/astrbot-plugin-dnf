@@ -151,6 +151,25 @@
       }
     }
   },
+  "translate": {
+    "description": "EVE 名称翻译",
+    "hint": "通过公开接口查询 EVE 中英文名称。",
+    "type": "object",
+    "items": {
+      "url": {
+        "description": "接口地址",
+        "hint": "EVE 公开名称翻译接口。",
+        "type": "string",
+        "default": "https://admin-api.oofo.cc/game/eve/public/translate"
+      },
+      "request_timeout_seconds": {
+        "description": "请求超时",
+        "hint": "翻译接口单次请求超时秒数。",
+        "type": "int",
+        "default": 10
+      }
+    }
+  },
   "ship_training": {
     "description": "EVE 舰船训练查询",
     "hint": "使用发送者 QQ 查询绑定角色的舰船立即训练时间。",
