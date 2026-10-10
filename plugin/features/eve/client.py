@@ -267,9 +267,7 @@ class FuzzworkMarketClient:
     def quote(self, type_id: int, market: str = "jita") -> MarketQuote:
         return self.quote_many([type_id], market)[type_id]
 
-    def quote_many(
-        self, type_ids: list[int], market: str = "jita"
-    ) -> dict[int, MarketQuote]:
+    def quote_many(self, type_ids: list[int], market: str = "jita") -> dict[int, MarketQuote]:
         if market == "jita":
             scope = {"station": JITA_STATION_ID}
             label = "吉他 4-4"
@@ -335,6 +333,7 @@ class FuzzworkMarketClient:
         except (TypeError, ValueError):
             return None
         return number if math.isfinite(number) and number > 0 else None
+
 
 class EveMarketClient:
     """Market facade with independent current-price and history providers."""

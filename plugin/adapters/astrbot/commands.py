@@ -33,6 +33,25 @@ def actor_id(event) -> str:
     return str(sender_id or (getter() if callable(getter) else ""))
 
 
+def is_group_event(event) -> bool:
+    getter = getattr(event, "get_group_id", None)
+    if callable(getter):
+        return bool(getter())
+    message_obj = getattr(event, "message_obj", None)
+    return bool(getattr(message_obj, "group_id", None))
+
+
+def platform_name(event) -> str:
+    getter = getattr(event, "get_platform_name", None)
+    if callable(getter):
+        return str(getter()).strip()
+    return str(getattr(event, "platform_name", "")).strip()
+
+
+def unified_origin(event) -> str:
+    return str(getattr(event, "unified_msg_origin", "")).strip()
+
+
 def prevent_default_reply(event) -> None:
     """Keep a matched plugin command from falling through to AstrBot's default LLM."""
     setter = getattr(event, "should_call_llm", None)
@@ -45,12 +64,26 @@ def prevent_default_reply(event) -> None:
         event.call_llm = True
 
 
-async def query_result(event, label: str, query: Callable[..., Awaitable[str]], *args, **kwargs):
+def stop_event_propagation(event) -> None:
+    """阻止同一消息继续命中 AstrBot 内置或其他插件处理器。"""
+    stopper = getattr(event, "stop_event", None)
+    if callable(stopper):
+        stopper()
+
+
+async def query_result(
+    event,
+    label: str,
+    query: Callable[..., Awaitable[str]],
+    *args,
+    error_text: str | None = None,
+    **kwargs,
+):
     try:
         text = await query(*args, **kwargs)
     except Exception:
         logger.exception("%s查询异常", label)
-        text = f"{label}查询出现异常，请稍后重试"
+        text = error_text or f"{label}查询出现异常，请稍后重试"
     return event.plain_result(text)
 
 
@@ -85,6 +118,40 @@ async def eve_query_results(
         else Comp.Image.fromFileSystem(rendered)
     )
     return [event.chain_result([Comp.Plain(reply.text), image])]
+
+
+async def html_card_result(
+    event,
+    label: str,
+    query: Callable[..., Awaitable],
+    *args,
+    html_renderer: Callable[..., Awaitable[str]],
+    **kwargs,
+):
+    """渲染只以图片展示的 HTML 卡片，失败时回退到文字。"""
+    try:
+        reply = await query(*args, **kwargs)
+    except Exception:
+        logger.exception("%s查询异常", label)
+        return event.plain_result(f"{label}查询出现异常，请稍后重试")
+    if not reply.html:
+        return event.plain_result(reply.text)
+    cache_key = hashlib.sha256(reply.html.encode()).hexdigest()
+    try:
+        rendered = await _render_chart(cache_key, reply.html, html_renderer)
+    except Exception:
+        logger.exception("%s HTML 卡片渲染失败，降级为文字回复", label)
+        return event.plain_result(reply.text)
+    if not rendered:
+        return event.plain_result(reply.text)
+    import astrbot.api.message_components as Comp
+
+    image = (
+        Comp.Image.fromURL(rendered)
+        if rendered.startswith(("http://", "https://", "data:"))
+        else Comp.Image.fromFileSystem(rendered)
+    )
+    return event.chain_result([image])
 
 
 async def _render_chart(

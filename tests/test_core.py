@@ -40,7 +40,23 @@ class ConfigTests(unittest.TestCase):
             for name, section in schema.items()
         }
         self.assertEqual(defaults, DEFAULT_CONFIG)
-        self.assertEqual(set(defaults), {"platform", "gold", "oil", "egg", "eve"})
+        self.assertEqual(
+            set(defaults),
+            {
+                "platform",
+                "gold",
+                "oil",
+                "egg",
+                "rat",
+                "info",
+                "ship",
+                "ship_training",
+                "eve_dt",
+                "kb",
+                "kb_watch",
+                "eve",
+            },
+        )
 
 
 class StorageTests(unittest.TestCase):

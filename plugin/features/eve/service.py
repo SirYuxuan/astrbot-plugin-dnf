@@ -49,6 +49,26 @@ class EveFeature:
             return await self._data(command[3:].strip(), is_admin)
         return await self.query(command)
 
+    async def handle_collection(self, message: str) -> str:
+        command = re.sub(r"^/?col(?:\s+|$)", "", message.strip(), count=1).strip()
+        if not command or command in {"帮助", "help"}:
+            return self.collection_help_text()
+        match = re.fullmatch(r"(.+?)\s+(?:(?:\*|×|[xX])\s*)?(\d+)", command)
+        if match is None:
+            if re.search(r"\s+(?:(?:\*|×|[xX])\s*)?[+-]?\d+(?:\.\d+)?$", command):
+                return "数量必须是 1 至 2,147,483,647 之间的整数"
+            return await self._query(command, quantity=1, collection_total=True)
+        item_query = match.group(1).strip()
+        quantity = int(match.group(2))
+        if quantity <= 0 or quantity > 2_147_483_647:
+            return "数量必须是 1 至 2,147,483,647 之间的整数"
+        return await self._query(
+            item_query,
+            quantity=quantity,
+            include_total=True,
+            collection_total=True,
+        )
+
     async def handle_reply(
         self, message: str, *, is_admin: bool = False, actor: str = ""
     ) -> EveReply:
@@ -88,9 +108,7 @@ class EveFeature:
         # a first query costs roughly the slower request instead of the sum of both requests.
         # We have already resolved the item above.  Calling ``handle`` here would repeat
         # alias/exact/fuzzy database work before issuing the same quote request.
-        text_task = asyncio.create_task(
-            self._quote(item, market, query=command, quantity=quantity)
-        )
+        text_task = asyncio.create_task(self._quote(item, market, query=command, quantity=quantity))
         try:
             history = await asyncio.to_thread(self.market.history, item.type_id, market, 30)
             text = await text_task
@@ -168,12 +186,29 @@ class EveFeature:
         )
 
     async def query(self, query: str) -> str:
+        return await self._query(query)
+
+    async def _query(
+        self,
+        query: str,
+        *,
+        quantity: int | None = None,
+        include_total: bool = False,
+        collection_total: bool = False,
+    ) -> str:
         item_query = query.strip()
         if re.fullmatch(r".+?\s*(?:\*|×|[xX])\s*\d+\s*", item_query):
             return "当前只查询物品单价，请去掉数量，例如：/jt 毒蜥级"
         if normalize_name(item_query) in {"plex", "伊甸币"}:
             item = EveType(PLEX_TYPE_ID, "PLEX", "伊甸币")
-            return await self._quote(item, "global", query=item_query, quantity=500)
+            return await self._quote(
+                item,
+                "global",
+                query=item_query,
+                quantity=quantity if quantity is not None else 500,
+                include_total=include_total,
+                total_label="总计价格" if collection_total else None,
+            )
         if item_query.isdigit():
             item = await asyncio.to_thread(self.catalog.get_type, int(item_query))
             if item is None:
@@ -191,7 +226,13 @@ class EveFeature:
                 item,
                 "global" if item.type_id == PLEX_TYPE_ID else "jita",
                 query=item_query,
-                quantity=500 if item.type_id == PLEX_TYPE_ID else 1,
+                quantity=(
+                    quantity
+                    if quantity is not None
+                    else (500 if item.type_id == PLEX_TYPE_ID else 1)
+                ),
+                include_total=include_total,
+                total_label="总计价格" if collection_total else None,
             )
         alias = await asyncio.to_thread(self.catalog.alias, item_query)
         if alias:
@@ -199,7 +240,13 @@ class EveFeature:
                 alias,
                 "global" if alias.type_id == PLEX_TYPE_ID else "jita",
                 query=item_query,
-                quantity=500 if alias.type_id == PLEX_TYPE_ID else 1,
+                quantity=(
+                    quantity
+                    if quantity is not None
+                    else (500 if alias.type_id == PLEX_TYPE_ID else 1)
+                ),
+                include_total=include_total,
+                total_label="总计价格" if collection_total else None,
             )
         asks_for_blueprint = self._asks_for_blueprint(item_query)
         asks_for_skin = self._asks_for_skin(item_query)
@@ -213,7 +260,13 @@ class EveFeature:
                 official,
                 "global" if official.type_id == PLEX_TYPE_ID else "jita",
                 query=item_query,
-                quantity=500 if official.type_id == PLEX_TYPE_ID else 1,
+                quantity=(
+                    quantity
+                    if quantity is not None
+                    else (500 if official.type_id == PLEX_TYPE_ID else 1)
+                ),
+                include_total=include_total,
+                total_label="总计价格" if collection_total else None,
             )
         candidates = await asyncio.to_thread(
             self.catalog.search,
@@ -227,7 +280,13 @@ class EveFeature:
             if not status["count"]:
                 return "EVE 名称库尚未初始化，请管理员执行：/jt 数据 更新"
             return f"没有找到“{item_query}”，可尝试输入更完整的中英文名称或物品 ID。"
-        return await self._quotes(candidates[: self.search_result_limit], item_query)
+        return await self._quotes(
+            candidates[: self.search_result_limit],
+            item_query,
+            quantity=quantity if quantity is not None else 1,
+            include_total=include_total,
+            collection_total=collection_total,
+        )
 
     @staticmethod
     def _asks_for_blueprint(query: str) -> bool:
@@ -247,7 +306,14 @@ class EveFeature:
         )
 
     async def _quote(
-        self, item: EveType, market: str, *, query: str = "", quantity: int = 1
+        self,
+        item: EveType,
+        market: str,
+        *,
+        query: str = "",
+        quantity: int = 1,
+        include_total: bool = False,
+        total_label: str | None = None,
     ) -> str:
         quote = await asyncio.to_thread(self.market.quote, item.type_id, market)
         return self._format_quote(
@@ -255,9 +321,19 @@ class EveFeature:
             quote,
             prefer_chinese=self._prefers_chinese(query),
             quantity=quantity,
+            include_total=include_total,
+            total_label=total_label,
         )
 
-    async def _quotes(self, items: list[EveType], query: str) -> str:
+    async def _quotes(
+        self,
+        items: list[EveType],
+        query: str,
+        *,
+        quantity: int = 1,
+        include_total: bool = False,
+        collection_total: bool = False,
+    ) -> str:
         """优先批量查询模糊匹配结果，避免逐项等待行情接口。"""
         quote_many = (
             getattr(self.market, "quote_many", None)
@@ -271,16 +347,50 @@ class EveFeature:
                     [item.type_id for item in items],
                     "jita",
                 )
-                return self._format_quotes(items, query, quotes)
+                return self._format_quotes(
+                    items,
+                    query,
+                    quotes,
+                    quantity=quantity,
+                    include_total=include_total,
+                    collection_total=collection_total,
+                )
             except Exception:
                 logger.exception("EVE 批量行情查询失败，降级到逐项查询")
+        if collection_total:
+            results = await asyncio.gather(
+                *(
+                    asyncio.to_thread(
+                        self.market.quote,
+                        item.type_id,
+                        "global" if item.type_id == PLEX_TYPE_ID else "jita",
+                    )
+                    for item in items
+                ),
+                return_exceptions=True,
+            )
+            quotes = {
+                item.type_id: result
+                for item, result in zip(items, results)
+                if isinstance(result, MarketQuote)
+            }
+            return self._format_quotes(
+                items,
+                query,
+                quotes,
+                quantity=quantity,
+                collection_total=True,
+            )
         results = await asyncio.gather(
             *(
                 self._quote(
                     item,
                     "global" if item.type_id == PLEX_TYPE_ID else "jita",
                     query=query,
-                    quantity=500 if item.type_id == PLEX_TYPE_ID else 1,
+                    quantity=(
+                        quantity if include_total else (500 if item.type_id == PLEX_TYPE_ID else 1)
+                    ),
+                    include_total=include_total,
                 )
                 for item in items
             ),
@@ -298,20 +408,56 @@ class EveFeature:
         return "\n──────────\n".join(sections)
 
     def _format_quotes(
-        self, items: list[EveType], query: str, quotes: dict[int, MarketQuote]
+        self,
+        items: list[EveType],
+        query: str,
+        quotes: dict[int, MarketQuote],
+        *,
+        quantity: int = 1,
+        include_total: bool = False,
+        collection_total: bool = False,
     ) -> str:
         prefer_chinese = self._prefers_chinese(query)
         sections = []
+        sell_total = 0.0
+        buy_total = 0.0
+        middle_total = 0.0
+        sell_count = 0
+        buy_count = 0
+        middle_count = 0
         for item in items:
             quote = quotes.get(item.type_id)
             if quote is None:
                 sections.append(f"{self._localized_name(item, prefer_chinese)}\n暂无报价")
             else:
                 sections.append(
-                    self._format_quote(item, quote, prefer_chinese=prefer_chinese).replace(
-                        "\n\n", "\n", 1
-                    )
+                    self._format_quote(
+                        item,
+                        quote,
+                        prefer_chinese=prefer_chinese,
+                        quantity=quantity,
+                        include_total=include_total,
+                    ).replace("\n\n", "\n", 1)
                 )
+                if quote.sell_min is not None:
+                    sell_total += quote.sell_min * quantity
+                    sell_count += 1
+                if quote.buy_max is not None:
+                    buy_total += quote.buy_max * quantity
+                    buy_count += 1
+                if quote.sell_min is not None and quote.buy_max is not None:
+                    middle_total += (quote.sell_min + quote.buy_max) / 2 * quantity
+                    middle_count += 1
+        if collection_total:
+            sections.append(
+                "总计价格\n"
+                f"最低卖价合计（{sell_count} 项）："
+                f"{self._isk(sell_total) if sell_count else '暂无报价'}\n"
+                f"最高收价合计（{buy_count} 项）："
+                f"{self._isk(buy_total) if buy_count else '暂无报价'}\n"
+                f"中间价合计（{middle_count} 项）："
+                f"{self._isk(middle_total) if middle_count else '暂无报价'}"
+            )
         return "\n──────────\n".join(sections)
 
     def _search(self, query: str) -> str:
@@ -422,22 +568,64 @@ class EveFeature:
         *,
         prefer_chinese: bool = True,
         quantity: int = 1,
+        include_total: bool = False,
+        total_label: str | None = None,
     ) -> str:
-        sell = EveFeature._isk(quote.sell_min * quantity if quote.sell_min is not None else None)
-        buy = EveFeature._isk(quote.buy_max * quantity if quote.buy_max is not None else None)
+        multiplier = 1 if include_total else quantity
+        sell = EveFeature._isk(quote.sell_min * multiplier if quote.sell_min is not None else None)
+        buy = EveFeature._isk(quote.buy_max * multiplier if quote.buy_max is not None else None)
         middle = (
-            EveFeature._isk((quote.sell_min + quote.buy_max) / 2 * quantity)
+            EveFeature._isk((quote.sell_min + quote.buy_max) / 2 * multiplier)
             if quote.sell_min is not None and quote.buy_max is not None
             else "暂无报价"
         )
         lines = [
             f"{EveFeature._localized_name(item, prefer_chinese)}"
-            f"{f' × {quantity}' if quantity != 1 else ''}",
+            f"{f' × {quantity}' if quantity != 1 or include_total else ''}",
             "",
             f"最低卖价：{sell}",
             f"最高收价：{buy}",
             f"中间价：{middle}",
         ]
+        if include_total:
+            sell_total = EveFeature._isk(
+                quote.sell_min * quantity if quote.sell_min is not None else None
+            )
+            buy_total = EveFeature._isk(
+                quote.buy_max * quantity if quote.buy_max is not None else None
+            )
+            middle_total = (
+                EveFeature._isk((quote.sell_min + quote.buy_max) / 2 * quantity)
+                if quote.sell_min is not None and quote.buy_max is not None
+                else "暂无报价"
+            )
+            lines.extend(
+                (
+                    f"最低卖价合计：{sell_total}",
+                    f"最高收价合计：{buy_total}",
+                    f"中间价合计：{middle_total}",
+                )
+            )
+        elif total_label:
+            sell_total = EveFeature._isk(
+                quote.sell_min * quantity if quote.sell_min is not None else None
+            )
+            buy_total = EveFeature._isk(
+                quote.buy_max * quantity if quote.buy_max is not None else None
+            )
+            middle_total = (
+                EveFeature._isk((quote.sell_min + quote.buy_max) / 2 * quantity)
+                if quote.sell_min is not None and quote.buy_max is not None
+                else "暂无报价"
+            )
+            lines.extend(
+                (
+                    total_label,
+                    f"最低卖价合计：{sell_total}",
+                    f"最高收价合计：{buy_total}",
+                    f"中间价合计：{middle_total}",
+                )
+            )
         return "\n".join(lines)
 
     @staticmethod
@@ -456,4 +644,16 @@ class EveFeature:
             "• /jt 别名 添加 月卡 PLEX\n"
             "• /jt 数据 更新｜状态\n"
             "普通物品查询吉他 4-4；PLEX/伊甸币查询全球 PLEX 市场。"
+        )
+
+    @staticmethod
+    def collection_help_text() -> str:
+        return (
+            "EVE 数量合计查价\n"
+            "用法：/col <物品名称或 ID> [数量]\n"
+            "• /col 中级水晶\n"
+            "• /col 毒蜥级 10\n"
+            "• /col Tritanium * 1000\n"
+            "• /col 34 × 1000\n"
+            "多项结果会将各项最低卖价相加；指定数量时按最低卖价 × 数量计算。"
         )

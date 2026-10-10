@@ -25,6 +25,51 @@ DEFAULT_CONFIG = {
         "interval_seconds": 3600,
         "daily_limit": 10,
     },
+    "rat": {
+        "url": "https://admin-api.oofo.cc/game/eve/public/users/by-qq/{qq}/ratting-report",
+        "request_timeout_seconds": 10,
+    },
+    "info": {
+        "url": "https://admin-api.oofo.cc/game/eve/public/users/by-qq/{qq}/info",
+        "request_timeout_seconds": 10,
+    },
+    "ship": {
+        "info_url": "https://admin-api.oofo.cc/game/eve/public/ships/info",
+        "image_url": "https://admin-api.oofo.cc/game/eve/assets/types/{type_id}/icon",
+        "request_timeout_seconds": 15,
+    },
+    "ship_training": {
+        "url": "https://admin-api.oofo.cc/game/eve/public/users/by-qq/{qq}/ship-training",
+        "request_timeout_seconds": 15,
+    },
+    "eve_dt": {
+        "monitor_enabled": True,
+        "notify_group_id": 101344113,
+        "poll_interval_seconds": 30,
+        "request_timeout_seconds": 10,
+        "status_url": "https://esi.evetech.net/latest/status/",
+        "user_agent": "astrbot-plugin-dnf/1.7 (+https://github.com/SirYuxuan/astrbot-plugin-dnf)",
+    },
+    "kb": {
+        "request_timeout_seconds": 15,
+        "cache_seconds": 600,
+        "user_agent": "astrbot-plugin-dnf/1.7 (+https://github.com/SirYuxuan/astrbot-plugin-dnf)",
+        "esi_ids_url": "https://esi.evetech.net/latest/universe/ids/",
+        "esi_names_url": "https://esi.evetech.net/latest/universe/names/",
+        "zkill_stats_url": "https://zkillboard.com/api/stats/characterID/{character_id}/kills/",
+    },
+    "kb_watch": {
+        "monitor_enabled": True,
+        "corporation_id": 98828269,
+        "alliance_id": 99007887,
+        "subscriber_qq_ids": [1718018032],
+        "startup_test_enabled": True,
+        "request_timeout_seconds": 10,
+        "sequence_url": "https://r2z2.zkillboard.com/ephemeral/sequence.json",
+        "ephemeral_url": "https://r2z2.zkillboard.com/ephemeral/{sequence}.json",
+        "names_url": "https://esi.evetech.net/latest/universe/names/",
+        "user_agent": "astrbot-plugin-dnf/1.7 (+https://github.com/SirYuxuan/astrbot-plugin-dnf)",
+    },
     "eve": {
         "search_result_limit": 5,
         "request_timeout_seconds": 30,
@@ -37,7 +82,7 @@ DEFAULT_CONFIG = {
         "fuzzwork_url": "https://market.fuzzwork.co.uk/aggregates/",
         "redis_url": "redis://localhost:6379/0",
         "redis_prefix": "yuxuandnf:eve",
-        "user_agent": "astrbot-plugin-dnf/1.6 (+https://github.com/SirYuxuan/astrbot-plugin-dnf)",
+        "user_agent": "astrbot-plugin-dnf/1.7 (+https://github.com/SirYuxuan/astrbot-plugin-dnf)",
     },
 }
 

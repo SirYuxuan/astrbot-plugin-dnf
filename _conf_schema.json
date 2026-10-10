@@ -119,6 +119,243 @@
       }
     }
   },
+  "rat": {
+    "description": "RAT 用户查询",
+    "hint": "根据指令发送者的 QQ 调用远端接口。",
+    "type": "object",
+    "items": {
+      "url": {
+        "description": "接口地址",
+        "hint": "{qq} 会替换为发送者 QQ。",
+        "type": "string",
+        "default": "https://admin-api.oofo.cc/game/eve/public/users/by-qq/{qq}/ratting-report"
+      },
+      "request_timeout_seconds": {
+        "description": "请求超时",
+        "hint": "RAT 接口单次请求超时秒数。",
+        "type": "int",
+        "default": 10
+      }
+    }
+  },
+  "info": {
+    "description": "EVE 用户信息查询",
+    "hint": "根据指令发送者的 QQ 查询绑定的 EVE 用户信息。",
+    "type": "object",
+    "items": {
+      "url": {
+        "description": "接口地址",
+        "hint": "{qq} 会替换为发送者 QQ。",
+        "type": "string",
+        "default": "https://admin-api.oofo.cc/game/eve/public/users/by-qq/{qq}/info"
+      },
+      "request_timeout_seconds": {
+        "description": "请求超时",
+        "hint": "用户信息接口单次请求超时秒数。",
+        "type": "int",
+        "default": 10
+      }
+    }
+  },
+  "ship_training": {
+    "description": "EVE 舰船训练查询",
+    "hint": "使用发送者 QQ 查询绑定角色的舰船立即训练时间。",
+    "type": "object",
+    "items": {
+      "url": {
+        "description": "接口地址",
+        "hint": "{qq} 会替换为发送者 QQ，舰船名通过 ship 查询参数发送。",
+        "type": "string",
+        "default": "https://admin-api.oofo.cc/game/eve/public/users/by-qq/{qq}/ship-training"
+      },
+      "request_timeout_seconds": {
+        "description": "请求超时",
+        "hint": "舰船训练接口单次请求超时秒数。",
+        "type": "int",
+        "default": 15
+      }
+    }
+  },
+  "ship": {
+    "description": "EVE 舰船资料查询",
+    "hint": "查询舰船槽位、挂点和加成，并生成图片卡片。",
+    "type": "object",
+    "items": {
+      "info_url": {
+        "description": "舰船资料接口",
+        "hint": "使用 name 查询参数，通常无需修改。",
+        "type": "string",
+        "default": "https://admin-api.oofo.cc/game/eve/public/ships/info"
+      },
+      "image_url": {
+        "description": "舰船图片接口",
+        "hint": "{type_id} 会替换为查询结果中的舰船类型 ID。",
+        "type": "string",
+        "default": "https://admin-api.oofo.cc/game/eve/assets/types/{type_id}/icon"
+      },
+      "request_timeout_seconds": {
+        "description": "请求超时",
+        "hint": "舰船资料和图片接口的单次请求超时秒数。",
+        "type": "int",
+        "default": 15
+      }
+    }
+  },
+  "eve_dt": {
+    "description": "EVE 每日 DT 通知",
+    "hint": "北京时间 18:55 提醒即将 DT，19:00 后检测开服并推送。",
+    "type": "object",
+    "items": {
+      "monitor_enabled": {
+        "description": "启用 DT 通知",
+        "hint": "是否启用每日停机提醒和开服检测。",
+        "type": "bool",
+        "default": true
+      },
+      "notify_group_id": {
+        "description": "推送群号",
+        "hint": "DT 提醒和开服通知发送到这个群。",
+        "type": "int",
+        "default": 101344113
+      },
+      "poll_interval_seconds": {
+        "description": "开服检测间隔",
+        "hint": "19:00 后查询 ESI 状态的间隔秒数。",
+        "type": "int",
+        "default": 30
+      },
+      "request_timeout_seconds": {
+        "description": "ESI 请求超时",
+        "hint": "单次状态查询的超时秒数。",
+        "type": "int",
+        "default": 10
+      },
+      "status_url": {
+        "description": "ESI 状态地址",
+        "hint": "通常无需修改。",
+        "type": "string",
+        "default": "https://esi.evetech.net/latest/status/"
+      },
+      "user_agent": {
+        "description": "请求 User-Agent",
+        "hint": "访问 ESI 时使用的应用标识。",
+        "type": "string",
+        "default": "astrbot-plugin-dnf/1.7 (+https://github.com/SirYuxuan/astrbot-plugin-dnf)"
+      }
+    }
+  },
+  "kb": {
+    "description": "EVE KB 战绩查询",
+    "hint": "根据角色名查询 zKillboard 公开战绩。",
+    "type": "object",
+    "items": {
+      "request_timeout_seconds": {
+        "description": "请求超时",
+        "hint": "ESI 和 zKillboard 单次请求超时秒数。",
+        "type": "int",
+        "default": 15
+      },
+      "cache_seconds": {
+        "description": "缓存时间",
+        "hint": "相同角色查询结果的进程内缓存秒数。",
+        "type": "int",
+        "default": 600
+      },
+      "user_agent": {
+        "description": "请求 User-Agent",
+        "hint": "访问 ESI 和 zKillboard 时使用的应用标识。",
+        "type": "string",
+        "default": "astrbot-plugin-dnf/1.7 (+https://github.com/SirYuxuan/astrbot-plugin-dnf)"
+      },
+      "esi_ids_url": {
+        "description": "ESI 角色解析地址",
+        "hint": "通常无需修改。",
+        "type": "string",
+        "default": "https://esi.evetech.net/latest/universe/ids/"
+      },
+      "esi_names_url": {
+        "description": "ESI 名称解析地址",
+        "hint": "用于解析军团和联盟名称，通常无需修改。",
+        "type": "string",
+        "default": "https://esi.evetech.net/latest/universe/names/"
+      },
+      "zkill_stats_url": {
+        "description": "zKillboard 统计地址",
+        "hint": "{character_id} 会替换为 EVE 角色 ID。",
+        "type": "string",
+        "default": "https://zkillboard.com/api/stats/characterID/{character_id}/kills/"
+      }
+    }
+  },
+  "kb_watch": {
+    "description": "军团与联盟 KB 实时订阅",
+    "hint": "军团记录推送至订阅 QQ，联盟记录推送至订阅的 KOOK 频道。",
+    "type": "object",
+    "items": {
+      "monitor_enabled": {
+        "description": "启用 KB 订阅",
+        "hint": "是否运行 zKillboard 实时流监听。",
+        "type": "bool",
+        "default": true
+      },
+      "corporation_id": {
+        "description": "EVE 军团 ID",
+        "hint": "需要监听击杀和损失的军团 ID。",
+        "type": "int",
+        "default": 98828269
+      },
+      "alliance_id": {
+        "description": "EVE 联盟 ID",
+        "hint": "需要推送到 KOOK 的联盟击杀和损失 ID。",
+        "type": "int",
+        "default": 99007887
+      },
+      "subscriber_qq_ids": {
+        "description": "默认订阅 QQ",
+        "hint": "首次运行时导入；之后可在群聊中使用 /subkb 切换订阅。",
+        "type": "list",
+        "default": [
+          1718018032
+        ]
+      },
+      "startup_test_enabled": {
+        "description": "重载测试卡片",
+        "hint": "插件加载或重载后，向所有已订阅 KOOK 频道发送一张测试卡片。",
+        "type": "bool",
+        "default": true
+      },
+      "request_timeout_seconds": {
+        "description": "请求超时",
+        "hint": "zKillboard 和 ESI 单次请求超时秒数。",
+        "type": "int",
+        "default": 10
+      },
+      "sequence_url": {
+        "description": "R2Z2 序号地址",
+        "hint": "通常无需修改。",
+        "type": "string",
+        "default": "https://r2z2.zkillboard.com/ephemeral/sequence.json"
+      },
+      "ephemeral_url": {
+        "description": "R2Z2 实时数据地址",
+        "hint": "{sequence} 会替换为实时流序号。",
+        "type": "string",
+        "default": "https://r2z2.zkillboard.com/ephemeral/{sequence}.json"
+      },
+      "names_url": {
+        "description": "ESI 名称解析地址",
+        "hint": "用于解析角色和星系名称。",
+        "type": "string",
+        "default": "https://esi.evetech.net/latest/universe/names/"
+      },
+      "user_agent": {
+        "description": "请求 User-Agent",
+        "hint": "访问 zKillboard 和 ESI 时使用的应用标识。",
+        "type": "string",
+        "default": "astrbot-plugin-dnf/1.7 (+https://github.com/SirYuxuan/astrbot-plugin-dnf)"
+      }
+    }
+  },
   "eve": {
     "description": "EVE 欧服吉他查价",
     "hint": "名称库、Fuzzwork 当前行情、Adam4EVE 历史和 Redis 共享缓存配置。",
@@ -195,7 +432,7 @@
         "description": "行情 User-Agent",
         "hint": "访问 Fuzzwork、Adam4EVE 和 SDE 时使用的应用标识。",
         "type": "string",
-        "default": "astrbot-plugin-dnf/1.6 (+https://github.com/SirYuxuan/astrbot-plugin-dnf)"
+        "default": "astrbot-plugin-dnf/1.7 (+https://github.com/SirYuxuan/astrbot-plugin-dnf)"
       }
     }
   }

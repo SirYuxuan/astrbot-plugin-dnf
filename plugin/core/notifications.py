@@ -1,7 +1,13 @@
-from typing import Protocol
+from typing import Any, Protocol
 
 
 class GroupNotifier(Protocol):
     """发送成功返回 True；平台不可用返回 False；发送失败抛出异常。"""
 
     async def send_group(self, group_id: int, message: str) -> bool: ...
+
+    async def send_private(self, user_id: int, message: str) -> bool: ...
+
+    async def send_session(self, session: str, message: str) -> bool: ...
+
+    async def send_session_card(self, session: str, card: dict[str, Any]) -> bool: ...

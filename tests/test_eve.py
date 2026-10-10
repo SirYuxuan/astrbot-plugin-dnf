@@ -132,6 +132,75 @@ class EveServiceTests(unittest.IsolatedAsyncioTestCase):
         self.market.quote.assert_called_once_with(44992, "global")
         self.assertIn("只查询物品单价", await self.feature.handle("/jt PLEX * 500"))
 
+    async def test_collection_query_shows_unit_prices_and_sell_total(self):
+        for command in (
+            "/col 毒蜥级 10",
+            "/col 毒蜥级 * 10",
+            "/col 毒蜥级 ×10",
+            "/col 毒蜥级 x 10",
+        ):
+            with self.subTest(command=command):
+                text = await self.feature.handle_collection(command)
+                self.assertIn("毒蜥级 × 10", text)
+                self.assertIn("最低卖价：10.00 ISK", text)
+                self.assertIn("最高收价：9.00 ISK", text)
+                self.assertIn("中间价：9.50 ISK", text)
+                self.assertIn("最低卖价合计：100.00 ISK", text)
+                self.assertIn("最高收价合计：90.00 ISK", text)
+                self.assertIn("中间价合计：95.00 ISK", text)
+
+    async def test_collection_query_supports_item_id_and_plex_quantity(self):
+        item = await self.feature.handle_collection("/col 34 1000")
+        plex = await self.feature.handle_collection("/col PLEX 20")
+        self.assertIn("三钛合金 × 1000", item)
+        self.assertIn("最低卖价合计：10,000.00 ISK", item)
+        self.assertIn("最高收价合计：9,000.00 ISK", item)
+        self.assertIn("中间价合计：9,500.00 ISK", item)
+        self.assertIn("PLEX × 20", plex)
+        self.assertIn("最低卖价合计：200.00 ISK", plex)
+        self.assertIn("最高收价合计：180.00 ISK", plex)
+        self.assertIn("中间价合计：190.00 ISK", plex)
+        self.assertEqual(
+            self.market.quote.call_args_list,
+            [
+                unittest.mock.call(34, "jita"),
+                unittest.mock.call(44992, "global"),
+            ],
+        )
+
+    async def test_collection_query_without_quantity_totals_all_matches(self):
+        text = await self.feature.handle_collection("/col 毒蜥")
+        self.assertIn("毒蜥级\n最低卖价：10.00 ISK", text)
+        self.assertIn("毒蜥级 PA\n最低卖价：10.00 ISK", text)
+        self.assertTrue(
+            text.endswith(
+                "总计价格\n"
+                "最低卖价合计（2 项）：20.00 ISK\n"
+                "最高收价合计（2 项）：18.00 ISK\n"
+                "中间价合计（2 项）：19.00 ISK"
+            )
+        )
+        self.assertEqual(self.market.quote.call_count, 2)
+
+    async def test_collection_exact_match_without_quantity_has_total(self):
+        text = await self.feature.handle_collection("/col 三钛合金")
+        self.assertIn("最低卖价：10.00 ISK", text)
+        self.assertIn("总计价格\n最低卖价合计：10.00 ISK", text)
+        self.assertIn("最高收价合计：9.00 ISK", text)
+        self.assertIn("中间价合计：9.50 ISK", text)
+
+    async def test_collection_query_requires_positive_integer_quantity(self):
+        for command in (
+            "/col",
+            "/col 毒蜥级 0",
+            "/col 毒蜥级 1.5",
+            "/col 毒蜥级 -1",
+        ):
+            with self.subTest(command=command):
+                text = await self.feature.handle_collection(command)
+                self.assertTrue("用法" in text or "数量必须" in text)
+        self.market.quote.assert_not_called()
+
     async def test_admin_alias_commands_use_target_name(self):
         denied = await self.feature.handle("/jt 别名 添加 毒蛇 Rattlesnake")
         self.assertIn("管理员", denied)
