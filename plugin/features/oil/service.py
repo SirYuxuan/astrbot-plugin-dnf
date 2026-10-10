@@ -62,12 +62,6 @@ class OilFeature(MonitorFeature):
         return [str(a).strip() for a in areas if str(a).strip()]
 
     async def run(self) -> None:
-        await asyncio.sleep(2)
-        if self.config.get("oil.startup_notice_enabled", True):
-            try:
-                await self._send_startup_notice()
-            except Exception as e:
-                logger.error(f"发送启动时油价通知失败: {e}")
         while True:
             try:
                 now = datetime.datetime.now()
@@ -82,9 +76,6 @@ class OilFeature(MonitorFeature):
             except Exception as e:
                 logger.error(f"油价每日任务异常: {e}")
                 await asyncio.sleep(60)
-
-    async def _send_startup_notice(self) -> None:
-        await self._collect_and_notify(only_changes=False)
 
     async def _check_and_send_changes(self) -> None:
         await self._collect_and_notify(only_changes=True)

@@ -91,12 +91,6 @@ class FeatureTests(unittest.IsolatedAsyncioTestCase):
                 await self.app.oil._check_and_send_changes()
         self.assertEqual(self.app.oil.last_oil_data, {})
 
-    async def test_oil_startup_does_not_commit_without_delivery(self):
-        self.notifier.send_group.return_value = False
-        with patch("plugin.features.oil.service.fetch_oil_data", return_value=self.oil_data):
-            await self.app.oil._send_startup_notice()
-        self.assertEqual(self.app.oil.last_oil_data, {})
-
     async def test_gold_query(self):
         with patch(
             "plugin.features.gold.service.DnfGoldRatioFetcher.fetch_gold_ratio_text",
@@ -387,30 +381,6 @@ class FeatureTests(unittest.IsolatedAsyncioTestCase):
             await feature.toggle_alliance(session, platform_name="kook", is_group=True),
         )
         self.assertEqual(feature.alliance_sessions, [])
-
-    async def test_kb_watch_sends_startup_test_card_only_to_kook_sessions(self):
-        feature = self.app.kb_watch
-        feature.state["alliance_session_origins"] = [
-            "kook:GroupMessage:channel-1",
-            "kook:GroupMessage:channel-2",
-        ]
-        feature.client = Mock()
-        self.notifier.send_session_card.return_value = True
-
-        await feature._send_startup_test()
-
-        self.assertEqual(self.notifier.send_session_card.await_count, 2)
-        card = self.notifier.send_session_card.await_args.args[1]
-        self.assertEqual(card["theme"], "info")
-        rendered = str(card)
-        self.assertIn("联盟 KB 测试消息", rendered)
-        self.assertIn("Yuxan Axiom", rendered)
-        self.assertIn("Yuxan Hauler", rendered)
-        self.assertIn("Brotherhood of Spacers", rendered)
-        self.assertIn("images.evetech.net/types/17715/render", rendered)
-        self.assertIn("https://zkillboard.com/alliance/99007887/", rendered)
-        feature.client.names.assert_not_called()
-        self.notifier.send_private.assert_not_awaited()
 
     async def test_kb_watch_formats_and_pushes_corporation_kill(self):
         feature = self.app.kb_watch

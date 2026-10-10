@@ -16,7 +16,6 @@ DEFAULT_CONFIG = {
         "notify_group_id": 101344113,
         "monitor_areas": ["河南"],
         "check_hour": 8,
-        "startup_notice_enabled": True,
     },
     "egg": {
         "monitor_enabled": True,
@@ -63,7 +62,6 @@ DEFAULT_CONFIG = {
         "corporation_id": 98828269,
         "alliance_id": 99007887,
         "subscriber_qq_ids": [1718018032],
-        "startup_test_enabled": True,
         "request_timeout_seconds": 10,
         "sequence_url": "https://r2z2.zkillboard.com/ephemeral/sequence.json",
         "ephemeral_url": "https://r2z2.zkillboard.com/ephemeral/{sequence}.json",

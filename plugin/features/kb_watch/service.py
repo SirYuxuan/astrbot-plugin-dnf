@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import datetime as dt
 import logging
 import re
 from typing import Any
@@ -91,7 +90,6 @@ class KbWatchFeature(MonitorFeature):
         return "联盟 KB 订阅成功，击杀和损失将推送至当前 KOOK 频道。"
 
     async def run(self) -> None:
-        await self._send_startup_test()
         while True:
             try:
                 has_corporation_target = bool(self.subscribers) and self.corporation_id > 0
@@ -122,61 +120,6 @@ class KbWatchFeature(MonitorFeature):
             except Exception:
                 logger.exception("zKillboard 军团订阅任务异常")
                 await asyncio.sleep(6)
-
-    async def _send_startup_test(self) -> None:
-        if not self.config.get("kb_watch.startup_test_enabled", True):
-            return
-        sessions = self.alliance_sessions
-        if not sessions:
-            return
-        package = {
-            "killmail_id": 139000000,
-            "esi": {
-                "killmail_time": dt.datetime.now(dt.timezone.utc).isoformat(),
-                "solar_system_id": 30000142,
-                "victim": {
-                    "character_id": 2124718609,
-                    "corporation_id": 98828269,
-                    "alliance_id": 99007887,
-                    "ship_type_id": 17715,
-                },
-                "attackers": [
-                    {
-                        "character_id": 2124698588,
-                        "corporation_id": 98828269,
-                        "alliance_id": 99007887,
-                        "final_blow": True,
-                    }
-                ],
-            },
-            "zkb": {"totalValue": 1_250_000_000},
-        }
-        names = {
-            2124698588: "Yuxan Axiom",
-            2124718609: "Yuxan Hauler",
-            98828269: "The Ninth Person",
-            99007887: "Brotherhood of Spacers",
-            30000142: "Jita",
-        }
-        card = self._formatter().format_card(
-            package,
-            "联盟 KB 测试消息",
-            names_override=names,
-            ship_name_override="毒蜥级",
-            detail_url_override="https://zkillboard.com/alliance/99007887/",
-        )
-        fallback = "【联盟 KB 测试消息】\n插件已加载，KOOK 联盟 KB 卡片推送正常。"
-        for session in sessions:
-            try:
-                sent = await self.notifier.send_session_card(session, card)
-                if not sent:
-                    await self.notifier.send_session(session, fallback)
-            except Exception:
-                logger.exception("KOOK 启动测试卡片发送失败，尝试文字降级: session=%s", session)
-                try:
-                    await self.notifier.send_session(session, fallback)
-                except Exception:
-                    logger.exception("KOOK 启动测试文字发送失败: session=%s", session)
 
     async def _handle_missing_sequence(self, sequence: int) -> None:
         latest = await asyncio.to_thread(self.client.latest_sequence)

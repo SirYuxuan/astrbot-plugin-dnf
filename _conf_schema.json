@@ -73,12 +73,6 @@
         "hint": "每日检查小时，范围 0-23。",
         "type": "int",
         "default": 8
-      },
-      "startup_notice_enabled": {
-        "description": "启动通知",
-        "hint": "插件启动时是否发送一次油价通知。",
-        "type": "bool",
-        "default": true
       }
     }
   },
@@ -317,12 +311,6 @@
         "default": [
           1718018032
         ]
-      },
-      "startup_test_enabled": {
-        "description": "重载测试卡片",
-        "hint": "插件加载或重载后，向所有已订阅 KOOK 频道发送一张测试卡片。",
-        "type": "bool",
-        "default": true
       },
       "request_timeout_seconds": {
         "description": "请求超时",
