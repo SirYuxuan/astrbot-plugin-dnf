@@ -270,7 +270,9 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
                     )
                     plugin.html_render = AsyncMock(return_value="https://example.test/chart.png")
                     event.chain_result = lambda chain: chain
-                    expected_chart_reply = ["EVE 查询结果"]
+                    expected_chart_reply = [
+                        [("text", "EVE 查询结果"), ("image-url", "https://example.test/chart.png")]
+                    ]
                     self.assertEqual(
                         [item async for item in plugin.eve_market(event)],
                         expected_chart_reply,
@@ -278,7 +280,7 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(
                         [item async for item in plugin.eve_market(event)], expected_chart_reply
                     )
-                    plugin.html_render.assert_not_awaited()
+                    plugin.html_render.assert_awaited_once()
                     await plugin.terminate()
                     await plugin.terminate()
             finally:

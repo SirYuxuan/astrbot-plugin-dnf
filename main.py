@@ -155,6 +155,7 @@ class DNF_Plugin(Star):
             event,
             self.app.eve.handle_reply,
             message_text(event),
+            html_renderer=self.html_render,
             is_admin=is_admin_event(event),
             actor=actor_id(event),
         )

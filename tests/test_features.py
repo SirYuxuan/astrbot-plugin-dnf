@@ -40,8 +40,8 @@ class FeatureTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn("总成本：60.00元", await self.app.oil.query("油价 河南 92 8"))
             self.assertIn("总成本：300.00元", await self.app.oil.query("油价 河南 92 8 500"))
 
-    def test_eve_runtime_does_not_enable_chart_rendering(self):
-        self.assertIsNone(self.app.eve.chart_renderer)
+    def test_eve_runtime_enables_chart_rendering(self):
+        self.assertIsNotNone(self.app.eve.chart_renderer)
 
     async def test_oil_invalid_arguments_do_not_call_network(self):
         with patch("plugin.features.oil.service.fetch_oil_data") as fetch:

@@ -6,6 +6,7 @@ from .core.runtime import FeatureRuntime
 from .core.storage import JsonFileStore
 from .features.egg.service import EggFeature
 from .features.eve.catalog import EveCatalog
+from .features.eve.chart import PriceChartRenderer
 from .features.eve.client import (
     Adam4EveHistoryClient,
     EveMarketClient,
@@ -126,6 +127,7 @@ class PluginApplication:
             market,
             updater,
             search_result_limit=int(config.get("eve.search_result_limit", 5)),
+            chart_renderer=PriceChartRenderer(),
         )
         self.eve_dt = EveDowntimeFeature(
             config,
