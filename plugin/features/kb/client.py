@@ -135,6 +135,8 @@ class KbClient:
         if not isinstance(payload, dict):
             raise ValueError("zKillboard 返回了无效数据")
         if payload.get("error"):
+            if str(payload["error"]).strip().casefold() == "invalid type or id":
+                return {}
             raise ValueError(str(payload["error"]))
         return payload
 
