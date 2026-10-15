@@ -49,7 +49,13 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
 
         event_module.MessageChain = CardMessageChain
         api_module = ModuleType("astrbot.api")
-        api_module.message_components = SimpleNamespace(Json=lambda data: ("json", data))
+        api_module.message_components = SimpleNamespace(
+            Json=lambda data: ("json", data),
+            Image=SimpleNamespace(
+                fromFileSystem=lambda path: ("image-file", path),
+                fromURL=lambda url: ("image-url", url),
+            ),
+        )
         with patch.dict(
             sys.modules,
             {"astrbot.api": api_module, "astrbot.api.event": event_module},
@@ -57,8 +63,12 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(
                 await notifier.send_session_card("kook:GroupMessage:channel-1", {"type": "card"})
             )
-        card_chain = context.send_message.await_args.args[1]
+            self.assertTrue(await notifier.send_private_image(456, "/tmp/kb.png"))
+        card_chain = context.send_message.await_args_list[-2].args[1]
         self.assertEqual(card_chain.chain, [("json", {"type": "card"})])
+        image_origin, image_chain = context.send_message.await_args_list[-1].args
+        self.assertEqual(image_origin, "aiocqhttp:FriendMessage:456")
+        self.assertEqual(image_chain.chain, [("image-file", "/tmp/kb.png")])
         missing = AstrBotGroupNotifier(context, PluginConfig({"platform": {"name": "missing"}}))
         self.assertFalse(await missing.send_group(123, "测试"))
 
@@ -146,6 +156,8 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
                             "ship",
                             "train",
                             "kb",
+                            "kbk",
+                            "kbl",
                             "subkb",
                             "suballkb",
                             "jita",
@@ -266,6 +278,28 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
                     event.message_str = "/kb Yuxan Axiom"
                     self.assertEqual([item async for item in plugin.kb(event)], ["KB 查询结果"])
                     plugin.app.kb.query.assert_awaited_once_with("/kb Yuxan Axiom")
+                    plugin.app.kb.query_recent = AsyncMock(
+                        return_value=SimpleNamespace(text="KB 最近击杀", html="<html>kb</html>")
+                    )
+                    event.message_str = "/kbk 2124698588"
+                    event.chain_result = lambda chain: chain
+                    plugin.html_render = AsyncMock(return_value="/tmp/kb.png")
+                    self.assertEqual(
+                        [item async for item in plugin.kb_kills(event)],
+                        [[("image-file", "/tmp/kb.png")]],
+                    )
+                    plugin.app.kb.query_recent.assert_awaited_once_with(
+                        "/kbk 2124698588", "kills"
+                    )
+                    event.message_str = "/kbl 2124698588"
+                    plugin.app.kb.query_recent = AsyncMock(return_value=SimpleNamespace(text="KB 最近损失", html=""))
+                    self.assertEqual(
+                        [item async for item in plugin.kb_losses(event)],
+                        ["KB 最近损失"],
+                    )
+                    plugin.app.kb.query_recent.assert_awaited_once_with(
+                        "/kbl 2124698588", "losses"
+                    )
                     plugin.app.kb_watch.toggle = AsyncMock(return_value="订阅成功")
                     event.message_str = "/subkb"
                     event.get_group_id = lambda: "123456"

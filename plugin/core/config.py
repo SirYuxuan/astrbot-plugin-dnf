@@ -73,6 +73,8 @@ DEFAULT_CONFIG = {
         "esi_ids_url": "https://esi.evetech.net/latest/universe/ids/",
         "esi_names_url": "https://esi.evetech.net/latest/universe/names/",
         "zkill_stats_url": "https://zkillboard.com/api/stats/characterID/{character_id}/kills/",
+        "zkill_recent_url": "https://zkillboard.com/api/characterID/{character_id}/{activity}/",
+        "esi_killmail_url": "https://esi.evetech.net/latest/killmails/{killmail_id}/{killmail_hash}/",
     },
     "kb_watch": {
         "monitor_enabled": True,

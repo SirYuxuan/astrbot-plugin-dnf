@@ -415,7 +415,7 @@ class FeatureTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("舰船：毒蜥级", message)
         self.assertIn("地点：Jita", message)
         self.assertIn("价值：1.25 B ISK", message)
-        self.assertIn("时间：10-09 20:30", message)
+        self.assertIn("时间：10-09 20:30:00 UTC+8", message)
         self.assertIn("https://zkillboard.com/kill/139000001/", message)
 
         await feature._process_package(package)
@@ -508,6 +508,144 @@ class FeatureTests(unittest.IsolatedAsyncioTestCase):
         ):
             self.assertEqual(client.latest_sequence(), 99933799)
             self.assertIsNone(client.package(99933800))
+
+    def test_kb_client_loads_latest_killmail_details(self):
+        client = KbClient()
+        summaries = Mock()
+        summaries.json.return_value = [
+            {
+                "killmail_id": 20,
+                "killmail_time": "2026-10-10T10:00:00Z",
+                "zkb": {"hash": "older-hash", "totalValue": 100},
+                "victim": {"character_id": 123},
+                "attackers": [],
+            },
+            {
+                "killmail_id": 21,
+                "killmail_time": "2026-10-11T10:00:00Z",
+                "zkb": {"hash": "newer-hash", "totalValue": 250},
+                "victim": {"character_id": 123},
+                "attackers": [],
+            },
+        ]
+        summaries.raise_for_status.return_value = None
+        details = Mock()
+        details.json.return_value = {
+            "victim": {"character_id": 123, "damage_taken": 500},
+            "attackers": [{"damage_done": 500, "final_blow": True}],
+            "killmail_time": "2026-10-11T10:00:00Z",
+        }
+        details.raise_for_status.return_value = None
+        with patch(
+            "plugin.features.kb.client.requests.get", side_effect=[summaries, details]
+        ) as get:
+            result = client.latest_character_killmail(123, "kills")
+        self.assertEqual(result["killmail_id"], 21)
+        self.assertEqual(result["zkb"]["totalValue"], 250)
+        self.assertEqual(result["esi"]["victim"]["damage_taken"], 500)
+        self.assertTrue(get.call_args_list[0].args[0].endswith("/123/kills/"))
+        self.assertNotIn("/limit/", get.call_args_list[0].args[0])
+        self.assertIn("/21/newer-hash/", get.call_args_list[1].args[0])
+
+    def test_kb_client_deduplicates_entity_ids_before_esi_names_request(self):
+        client = KbClient()
+        response = Mock(status_code=200)
+        response.json.return_value = [{"id": 11, "name": "Pilot"}]
+        response.raise_for_status.return_value = None
+        with patch("plugin.features.kb.client.requests.post", return_value=response) as post:
+            names = client.names([11, 22, 11, 0, -1, "22"])
+        self.assertEqual(post.call_args.kwargs["json"], [11, 22])
+        self.assertEqual(names, {11: "Pilot"})
+
+    def test_kb_client_splits_esi_names_batches_after_validation_error(self):
+        client = KbClient()
+        rejected = Mock(status_code=400)
+        left = Mock(status_code=200)
+        left.json.return_value = [{"id": 11, "name": "Pilot One"}]
+        right = Mock(status_code=200)
+        right.json.return_value = [{"id": 22, "name": "Pilot Two"}]
+        with patch(
+            "plugin.features.kb.client.requests.post",
+            side_effect=[rejected, left, right],
+        ) as post:
+            names = client.names([11, 22])
+        self.assertEqual([call.kwargs["json"] for call in post.call_args_list], [[11, 22], [11], [22]])
+        self.assertEqual(names, {11: "Pilot One", 22: "Pilot Two"})
+
+    async def test_kb_recent_query_builds_a_card_with_utc8_location(self):
+        feature = self.app.kb
+        package = {
+            "killmail_id": 139000123,
+            "esi": {
+                "killmail_time": "2026-10-12T13:40:00Z",
+                "solar_system_id": 30000142,
+                "victim": {"character_id": 2123456789, "damage_taken": 700},
+                "attackers": [],
+            },
+            "zkb": {"totalValue": 100000, "droppedValue": 50000},
+        }
+        feature.client.latest_character_killmail = Mock(return_value=package)
+        feature.client.names = Mock(
+            return_value={2123456789: "Target Pilot", 30000142: "Jita"}
+        )
+        feature.renderer.render = Mock(return_value="<html>KB image</html>")
+        reply = await feature.query_recent("/kbk 2123456789", "kills")
+        self.assertIn("Target Pilot", reply.text)
+        self.assertIn("2026-10-12 21:40 UTC+8", reply.text)
+        self.assertEqual(reply.html, "<html>KB image</html>")
+        feature.client.latest_character_killmail.assert_called_once_with(2123456789, "kills")
+        feature.renderer.render.assert_called_once_with(package, "角色最近击杀")
+
+    def test_kb_image_renderer_uses_utc8_blue_location_and_participant_details(self):
+        renderer = self.app.kb.renderer
+        renderer.client.names = Mock(
+            return_value={
+                2123456789: "Target Pilot",
+                30000142: "Jita",
+                2123456788: "Final Pilot",
+                98000001: "Example Corp",
+            }
+        )
+        renderer.catalog.replace_types(
+            [
+                EveType(17715, "Gila", "毒蜥级"),
+                EveType(28668, "Heavy Missile Launcher II", "重型导弹发射器 II"),
+                EveType(28670, "Scourge Heavy Missile", "鞭挞重型导弹"),
+                EveType(11105, "Damage Control II", "损伤控制 II"),
+            ],
+            "kb-render-test",
+        )
+        package = {
+            "killmail_id": 139000124,
+            "esi": {
+                "killmail_time": "2026-10-12T13:40:00Z",
+                "solar_system_id": 30000142,
+                "victim": {
+                    "character_id": 2123456789,
+                    "corporation_id": 98000001,
+                    "ship_type_id": 17715,
+                    "damage_taken": 1000,
+                    "items": [{"item_type_id": 11105, "quantity_dropped": 1}],
+                },
+                "attackers": [
+                    {
+                        "character_id": 2123456788,
+                        "corporation_id": 98000001,
+                        "ship_type_id": 17715,
+                        "weapon_type_id": 28670,
+                        "damage_done": 1000,
+                        "final_blow": True,
+                    }
+                ],
+            },
+            "zkb": {"totalValue": 200000, "droppedValue": 50000},
+        }
+        markup = renderer.render(package, "角色最近击杀")
+        self.assertIn("2026-10-12 21:40:00 UTC+8", markup)
+        self.assertIn('<strong class="location">Jita</strong>', markup)
+        self.assertIn("class=\"final\">最后一击", markup)
+        self.assertIn("毒蜥级 / 鞭挞重型导弹", markup)
+        self.assertIn("掉落 ×1", markup)
 
     def test_kb_client_resolves_character_stats_and_affiliations(self):
         client = KbClient(cache_seconds=600)

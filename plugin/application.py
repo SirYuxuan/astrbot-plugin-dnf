@@ -27,6 +27,7 @@ from .features.help.service import HelpFeature
 from .features.info.client import InfoClient
 from .features.info.service import InfoFeature
 from .features.kb.client import KbClient
+from .features.kb.renderer import KbKillmailRenderer
 from .features.kb.service import KbFeature
 from .features.kb_watch.client import ZkillLiveClient
 from .features.kb_watch.service import KbWatchFeature
@@ -103,18 +104,26 @@ class PluginApplication:
             url=str(config.get("ship_training.url", ShipTrainingFeature.DEFAULT_URL)),
             timeout=int(config.get("ship_training.request_timeout_seconds", 15)),
         )
-        self.kb = KbFeature(
-            KbClient(
-                timeout=int(config.get("kb.request_timeout_seconds", 15)),
-                cache_seconds=int(config.get("kb.cache_seconds", 600)),
-                user_agent=str(config.get("kb.user_agent", "astrbot-plugin-dnf/1.7")),
-                esi_ids_url=str(config.get("kb.esi_ids_url", KbClient.ESI_IDS_URL)),
-                esi_names_url=str(config.get("kb.esi_names_url", KbClient.ESI_NAMES_URL)),
-                zkill_stats_url=str(config.get("kb.zkill_stats_url", KbClient.ZKILL_STATS_URL)),
-            )
-        )
         eve_dir = store.base_dir / "eve"
         catalog = EveCatalog(eve_dir / "eve.db")
+        kb_stats_client = KbClient(
+            timeout=int(config.get("kb.request_timeout_seconds", 15)),
+            cache_seconds=int(config.get("kb.cache_seconds", 600)),
+            user_agent=str(config.get("kb.user_agent", "astrbot-plugin-dnf/1.7")),
+            esi_ids_url=str(config.get("kb.esi_ids_url", KbClient.ESI_IDS_URL)),
+            esi_names_url=str(config.get("kb.esi_names_url", KbClient.ESI_NAMES_URL)),
+            zkill_stats_url=str(config.get("kb.zkill_stats_url", KbClient.ZKILL_STATS_URL)),
+            zkill_recent_url=str(
+                config.get("kb.zkill_recent_url", KbClient.ZKILL_RECENT_URL)
+            ),
+            esi_killmail_url=str(
+                config.get("kb.esi_killmail_url", KbClient.ESI_KILLMAIL_URL)
+            ),
+        )
+        self.kb = KbFeature(
+            kb_stats_client,
+            renderer=KbKillmailRenderer(kb_stats_client, catalog),
+        )
         redis_url = str(config.get("eve.redis_url", "") or "").strip()
         if redis_url:
             cache = RedisOrderCache(
@@ -175,22 +184,24 @@ class PluginApplication:
                 user_agent=str(config.get("eve_dt.user_agent", "astrbot-plugin-dnf/1.7")),
             ),
         )
+        kb_client = ZkillLiveClient(
+            timeout=int(config.get("kb_watch.request_timeout_seconds", 10)),
+            user_agent=str(config.get("kb_watch.user_agent", "astrbot-plugin-dnf/1.7")),
+            sequence_url=str(
+                config.get("kb_watch.sequence_url", ZkillLiveClient.DEFAULT_SEQUENCE_URL)
+            ),
+            ephemeral_url=str(
+                config.get("kb_watch.ephemeral_url", ZkillLiveClient.DEFAULT_EPHEMERAL_URL)
+            ),
+            names_url=str(config.get("kb_watch.names_url", ZkillLiveClient.DEFAULT_NAMES_URL)),
+        )
         self.kb_watch = KbWatchFeature(
             config,
             store,
             notifier,
-            ZkillLiveClient(
-                timeout=int(config.get("kb_watch.request_timeout_seconds", 10)),
-                user_agent=str(config.get("kb_watch.user_agent", "astrbot-plugin-dnf/1.7")),
-                sequence_url=str(
-                    config.get("kb_watch.sequence_url", ZkillLiveClient.DEFAULT_SEQUENCE_URL)
-                ),
-                ephemeral_url=str(
-                    config.get("kb_watch.ephemeral_url", ZkillLiveClient.DEFAULT_EPHEMERAL_URL)
-                ),
-                names_url=str(config.get("kb_watch.names_url", ZkillLiveClient.DEFAULT_NAMES_URL)),
-            ),
+            kb_client,
             catalog,
+            renderer=self.kb.renderer,
         )
         self.runtime = FeatureRuntime(
             (self.gold, self.oil, self.egg, self.eve_dt, self.kb_watch, self.rat_subscription)

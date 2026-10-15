@@ -9,6 +9,7 @@ import requests
 
 from ...core.feature import MonitorFeature
 from ..eve.catalog import EveCatalog
+from ..kb.renderer import KbKillmailRenderer
 from .client import ZkillLiveClient
 from .formatter import KbWatchFormatter
 
@@ -19,10 +20,21 @@ class KbWatchFeature(MonitorFeature):
     name = "kb_watch"
     YUXAN_LOSS_RECIPIENT = 1718018032
 
-    def __init__(self, config, store, notifier, client: ZkillLiveClient, catalog: EveCatalog):
+    def __init__(
+        self,
+        config,
+        store,
+        notifier,
+        client: ZkillLiveClient,
+        catalog: EveCatalog,
+        *,
+        renderer: KbKillmailRenderer | None = None,
+    ):
         super().__init__(config, store, notifier)
         self.client = client
         self.catalog = catalog
+        self.renderer = renderer or KbKillmailRenderer(client, catalog)
+        self.html_renderer = None
         raw = self.store.load("kb_watch_state.json", {})
         self.state: dict[str, Any] = raw if isinstance(raw, dict) else {}
         if "subscriber_qq_ids" not in self.state:
@@ -33,6 +45,9 @@ class KbWatchFeature(MonitorFeature):
         if "alliance_session_origins" not in self.state:
             self.state["alliance_session_origins"] = []
             self._save_state()
+
+    def set_html_renderer(self, renderer) -> None:
+        self.html_renderer = renderer
 
     @property
     def corporation_id(self) -> int:
@@ -145,16 +160,7 @@ class KbWatchFeature(MonitorFeature):
         )
         if private_event and recipients:
             matched = True
-            message = await asyncio.to_thread(
-                self._formatter().format_text, package, private_event
-            )
-            for user_id in recipients:
-                try:
-                    sent = await self.notifier.send_private(user_id, message)
-                    if not sent:
-                        logger.warning("KB 私聊推送平台不可用: qq=%s", user_id)
-                except Exception:
-                    logger.exception("KB 私聊推送失败: qq=%s", user_id)
+            await self._send_private_record(package, private_event, recipients)
         if alliance_event and self.alliance_sessions and not restricted_loss:
             matched = True
             card = await asyncio.to_thread(self._formatter().format_card, package, alliance_event)
@@ -242,6 +248,41 @@ class KbWatchFeature(MonitorFeature):
 
     def _formatter(self) -> KbWatchFormatter:
         return KbWatchFormatter(self.client, self.catalog)
+
+    async def _send_private_record(
+        self, package: dict[str, Any], event_type: str, recipients: list[int]
+    ) -> None:
+        rendered = ""
+        if callable(self.html_renderer):
+            try:
+                markup = await asyncio.to_thread(self.renderer.render, package, event_type)
+                rendered = await self.html_renderer(
+                    markup,
+                    {},
+                    return_url=False,
+                    options={"type": "png", "full_page": True, "omit_background": True},
+                )
+                rendered = str(rendered or "")
+            except Exception:
+                logger.exception("KB 图片通知渲染失败，降级为文字: event=%s", event_type)
+
+        message: str | None = None
+        for user_id in recipients:
+            try:
+                sent = False
+                send_image = getattr(self.notifier, "send_private_image", None)
+                if rendered and callable(send_image):
+                    sent = await send_image(user_id, rendered)
+                if not sent:
+                    if message is None:
+                        message = await asyncio.to_thread(
+                            self._formatter().format_text, package, event_type
+                        )
+                    sent = await self.notifier.send_private(user_id, message)
+                if not sent:
+                    logger.warning("KB 私聊推送平台不可用: qq=%s", user_id)
+            except Exception:
+                logger.exception("KB 私聊推送失败: qq=%s", user_id)
 
     def _seen_ids(self) -> list[int]:
         value = self.state.get("seen_killmail_ids", [])

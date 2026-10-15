@@ -5,6 +5,8 @@ from __future__ import annotations
 import datetime as dt
 from typing import Any
 
+import requests
+
 from ..eve.catalog import EveCatalog
 from .client import ZkillLiveClient
 
@@ -22,7 +24,10 @@ class KbWatchFormatter:
         character_id = self._integer(victim.get("character_id"))
         system_id = self._integer(esi.get("solar_system_id"))
         ship_type_id = self._integer(victim.get("ship_type_id"))
-        names = self.client.names([character_id, system_id])
+        try:
+            names = self.client.names([character_id, system_id])
+        except requests.RequestException:
+            names = {}
         character_name = names.get(character_id, "未知角色")
         system_name = names.get(system_id, f"星系 {system_id}" if system_id else "未知星系")
         ship = self.catalog.get_type(ship_type_id)
@@ -245,9 +250,9 @@ class KbWatchFormatter:
     def _parse_time(cls, value: str) -> str:
         try:
             parsed = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
-            return parsed.astimezone(cls._BEIJING).strftime("%m-%d %H:%M")
+            return parsed.astimezone(cls._BEIJING).strftime("%m-%d %H:%M:%S UTC+8")
         except ValueError:
-            return "未知"
+            return "未知时间 UTC+8"
 
     @staticmethod
     def _format_isk(value: float) -> str:

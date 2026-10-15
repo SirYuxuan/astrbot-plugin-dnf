@@ -1,19 +1,31 @@
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 import logging
 import re
+from dataclasses import dataclass
 
 import requests
 
 from .client import KbClient, KbReport
+from .renderer import KbKillmailRenderer
 
 logger = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class KbImageReply:
+    text: str
+    html: str = ""
+
+
 class KbFeature:
-    def __init__(self, client: KbClient) -> None:
+    def __init__(
+        self, client: KbClient, renderer: KbKillmailRenderer | None = None
+    ) -> None:
         self.client = client
+        self.renderer = renderer
 
     async def query(self, message: str) -> str:
         query = re.sub(r"^/?kb(?:\s+|$)", "", message.strip(), count=1).strip()
@@ -49,6 +61,85 @@ class KbFeature:
             label = {"character": "角色", "corporation": "军团", "alliance": "联盟"}[entity_type]
             return f"未找到{label}：{query}\n请检查名称是否完整，名称支持空格。"
         return self.format_report(report)
+
+    async def query_recent(self, message: str, activity: str) -> KbImageReply:
+        command = "/kbk" if activity == "kills" else "/kbl"
+        query = re.sub(r"^/?(?:kbk|kbl)(?:\s+|$)", "", message.strip(), count=1).strip()
+        if activity not in {"kills", "losses"}:
+            return KbImageReply("KB 记录类型无效。")
+        if not re.fullmatch(r"[1-9]\d{0,11}", query):
+            return KbImageReply(f"用法：{command} 角色ID")
+        character_id = int(query)
+        title = "角色最近击杀" if activity == "kills" else "角色最近损失"
+        try:
+            package = await asyncio.to_thread(
+                self.client.latest_character_killmail, character_id, activity
+            )
+        except (requests.RequestException, ValueError):
+            logger.exception("KB 最近记录查询失败: id=%s activity=%s", character_id, activity)
+            return KbImageReply("KB 最近记录查询失败，请稍后重试。")
+        if package is None:
+            kind = "击杀" if activity == "kills" else "损失"
+            return KbImageReply(f"角色 {character_id} 暂无公开的最近{kind}记录。")
+        text = await asyncio.to_thread(self._format_recent_text, package, title)
+        if self.renderer is None:
+            return KbImageReply(text)
+        try:
+            markup = await asyncio.to_thread(self.renderer.render, package, title)
+        except Exception:
+            logger.exception("KB 最近记录图片构造失败: id=%s", character_id)
+            return KbImageReply(text)
+        return KbImageReply(text=text, html=markup)
+
+    def _format_recent_text(self, package: dict, title: str) -> str:
+        esi = package.get("esi") if isinstance(package.get("esi"), dict) else {}
+        victim = esi.get("victim") if isinstance(esi.get("victim"), dict) else {}
+        character_id = self._positive_int(victim.get("character_id")) or 0
+        system_id = self._positive_int(esi.get("solar_system_id")) or 0
+        ship_type_id = self._positive_int(victim.get("ship_type_id")) or 0
+        try:
+            names = self.client.names([character_id, system_id])
+        except requests.RequestException:
+            names = {}
+        character_name = names.get(character_id, f"角色 {character_id}")
+        system_name = names.get(system_id, f"星系 {system_id}" if system_id else "未知星系")
+        zkb = package.get("zkb") if isinstance(package.get("zkb"), dict) else {}
+        value = self._number(zkb.get("totalValue"))
+        killmail_id = self._positive_int(package.get("killmail_id")) or 0
+        timestamp = self._parse_recent_time(str(esi.get("killmail_time", "")))
+        return (
+            f"【{title}】{character_name}\n"
+            f"舰船 Type ID：{ship_type_id}\n"
+            f"地点：{system_name}\n"
+            f"时间：{timestamp}\n"
+            f"战损价值：{self._format_isk(value)}\n"
+            f"https://zkillboard.com/kill/{killmail_id}/"
+        )
+
+    @staticmethod
+    def _positive_int(value):
+        try:
+            result = int(value)
+        except (TypeError, ValueError):
+            return None
+        return result if result > 0 else None
+
+    @staticmethod
+    def _number(value) -> float:
+        try:
+            return max(0.0, float(value))
+        except (TypeError, ValueError):
+            return 0.0
+
+    @staticmethod
+    def _parse_recent_time(value: str) -> str:
+        try:
+            parsed = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+            return parsed.astimezone(dt.timezone(dt.timedelta(hours=8))).strftime(
+                "%Y-%m-%d %H:%M UTC+8"
+            )
+        except ValueError:
+            return "未知时间 UTC+8"
 
     @classmethod
     def format_report(cls, report: KbReport) -> str:

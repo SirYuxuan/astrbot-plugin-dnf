@@ -24,6 +24,34 @@ class AstrBotGroupNotifier:
         await client.send_private_msg(user_id=user_id, message=message)
         return True
 
+    async def send_private_image(self, user_id: int, path: str) -> bool:
+        if not path.strip():
+            return False
+        from astrbot.api import message_components as Comp
+        from astrbot.api.event import MessageChain
+
+        chain = MessageChain()
+        image = (
+            Comp.Image.fromURL(path)
+            if path.startswith(("http://", "https://", "data:"))
+            else Comp.Image.fromFileSystem(path)
+        )
+        chain.chain.append(image)
+        platform = str(self._config.get("platform.name", "aiocqhttp"))
+        origin_platform = platform
+        for instance in self._context.platform_manager.get_insts():
+            try:
+                if instance.meta().name == platform:
+                    origin_platform = str(instance.meta().id)
+                    break
+            except AttributeError:
+                continue
+        return bool(
+            await self._context.send_message(
+                f"{origin_platform}:FriendMessage:{int(user_id)}", chain
+            )
+        )
+
     async def send_session(self, session: str, message: str) -> bool:
         if not session.strip():
             return False

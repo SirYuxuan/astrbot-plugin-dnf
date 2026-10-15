@@ -27,6 +27,8 @@ class HelpFeature:
         "由已在舰队的主角色邀请同 QQ 下其他角色，也可指定目标角色名\n"
         "/kb Yuxan Axiom\n"
         "查询角色 zKillboard 战绩；军团或联盟可用 /kb 军团 名称、/kb 联盟 名称\n"
+        "/kbk 角色ID / /kbl 角色ID\n"
+        "查询角色最近击杀或损失，生成战报图片\n"
         "/timer 2天2小时5分\n"
         "计算指定时长后的 EVE 时间和北京时间\n"
         "/status\n"

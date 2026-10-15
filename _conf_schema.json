@@ -360,6 +360,18 @@
         "hint": "{character_id} 会替换为 EVE 角色 ID。",
         "type": "string",
         "default": "https://zkillboard.com/api/stats/characterID/{character_id}/kills/"
+      },
+      "zkill_recent_url": {
+        "description": "zKillboard 最近记录地址",
+        "hint": "{character_id} 和 {activity} 会替换为角色 ID 与 kills/losses。",
+        "type": "string",
+        "default": "https://zkillboard.com/api/characterID/{character_id}/{activity}/"
+      },
+      "esi_killmail_url": {
+        "description": "ESI killmail 详情地址",
+        "hint": "{killmail_id} 和 {killmail_hash} 会替换为战报 ID 与哈希。",
+        "type": "string",
+        "default": "https://esi.evetech.net/latest/killmails/{killmail_id}/{killmail_hash}/"
       }
     }
   },

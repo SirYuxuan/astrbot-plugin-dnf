@@ -28,7 +28,7 @@ from .plugin.features.rat.client import EVE_BINDING_HINT
     "yuxuandnf",
     "Sir 丶雨轩",
     "烟雨机器人插件，支持 DNF 金币比例、油价、蛋价和 EVE 查询。",
-    "v1.8",
+    "v1.9",
 )
 class DNF_Plugin(Star):
     """保留历史插件标识及入口类名，兼容已有安装。"""
@@ -41,6 +41,7 @@ class DNF_Plugin(Star):
             legacy_dir=Path(__file__).resolve().parent,
         )
         self.app = PluginApplication(cfg, store, AstrBotGroupNotifier(context, cfg))
+        self.app.kb_watch.set_html_renderer(self.html_render)
 
     async def initialize(self) -> None:
         await self.app.runtime.start()
@@ -199,6 +200,32 @@ class DNF_Plugin(Star):
     async def kb(self, event):
         """按角色、军团或联盟名称查询 zKillboard 战绩。"""
         yield await query_result(event, "KB", self.app.kb.query, message_text(event))
+
+    @filter.command("kbk")
+    async def kb_kills(self, event):
+        """按角色 ID 获取最近一次击杀并渲染战报图片。"""
+        prevent_default_reply(event)
+        yield await html_card_result(
+            event,
+            "KB 最近击杀",
+            self.app.kb.query_recent,
+            message_text(event),
+            "kills",
+            html_renderer=self.html_render,
+        )
+
+    @filter.command("kbl")
+    async def kb_losses(self, event):
+        """按角色 ID 获取最近一次损失并渲染战报图片。"""
+        prevent_default_reply(event)
+        yield await html_card_result(
+            event,
+            "KB 最近损失",
+            self.app.kb.query_recent,
+            message_text(event),
+            "losses",
+            html_renderer=self.html_render,
+        )
 
     @filter.command("subkb")
     async def subkb(self, event):

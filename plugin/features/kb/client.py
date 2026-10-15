@@ -35,6 +35,8 @@ class KbClient:
     ESI_NAMES_URL = "https://esi.evetech.net/latest/universe/names/"
     ZKILL_STATS_URL = "https://zkillboard.com/api/stats/characterID/{character_id}/kills/"
     ZKILL_ENTITY_STATS_URL = "https://zkillboard.com/api/stats/{entity_type}/{entity_id}/kills/"
+    ZKILL_RECENT_URL = "https://zkillboard.com/api/characterID/{character_id}/{activity}/"
+    ESI_KILLMAIL_URL = "https://esi.evetech.net/latest/killmails/{killmail_id}/{killmail_hash}/"
 
     def __init__(
         self,
@@ -46,6 +48,8 @@ class KbClient:
         esi_names_url: str = ESI_NAMES_URL,
         zkill_stats_url: str = ZKILL_STATS_URL,
         zkill_entity_stats_url: str = ZKILL_ENTITY_STATS_URL,
+        zkill_recent_url: str = ZKILL_RECENT_URL,
+        esi_killmail_url: str = ESI_KILLMAIL_URL,
     ) -> None:
         self.timeout = max(1, timeout)
         self.cache_seconds = max(60, cache_seconds)
@@ -57,11 +61,76 @@ class KbClient:
         self.esi_names_url = esi_names_url
         self.zkill_stats_url = zkill_stats_url
         self.zkill_entity_stats_url = zkill_entity_stats_url
+        self.zkill_recent_url = zkill_recent_url
+        self.esi_killmail_url = esi_killmail_url
         self._cache: dict[str, tuple[float, KbReport | None]] = {}
         self._cache_lock = threading.Lock()
 
     def query(self, character_name: str) -> KbReport | None:
         return self.query_entity("character", character_name)
+
+    def names(self, entity_ids: list[int]) -> dict[int, str]:
+        return self._resolve_names(entity_ids)
+
+    def latest_character_killmail(
+        self, character_id: int, activity: str
+    ) -> dict[str, Any] | None:
+        try:
+            character_id = int(character_id)
+        except (TypeError, ValueError) as error:
+            raise ValueError("EVE 角色 ID 无效") from error
+        if character_id <= 0 or activity not in {"kills", "losses"}:
+            raise ValueError("EVE 角色 ID 或 KB 类型无效")
+        response = requests.get(
+            self.zkill_recent_url.format(character_id=character_id, activity=activity),
+            headers=self.headers,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, list):
+            raise ValueError("zKillboard 最近记录格式无效")
+        records = [
+            row for row in payload
+            if isinstance(row, dict) and self._positive_int(row.get("killmail_id"))
+        ]
+        if not records:
+            return None
+        summary = max(
+            records,
+            key=lambda row: (
+                str(row.get("killmail_time", "")),
+                self._integer(row.get("killmail_id")),
+            ),
+        )
+        killmail_id = int(summary["killmail_id"])
+        zkb = summary.get("zkb") if isinstance(summary.get("zkb"), dict) else {}
+        esi = {
+            key: summary[key]
+            for key in ("attackers", "killmail_time", "solar_system_id", "victim")
+            if key in summary
+        }
+        killmail_hash = str(zkb.get("hash", "")).strip()
+        if killmail_hash:
+            try:
+                detail_response = requests.get(
+                    self.esi_killmail_url.format(
+                        killmail_id=killmail_id,
+                        killmail_hash=killmail_hash,
+                    ),
+                    params={"datasource": "tranquility"},
+                    headers=self.headers,
+                    timeout=self.timeout,
+                )
+                detail_response.raise_for_status()
+                detail = detail_response.json()
+                if isinstance(detail, dict) and isinstance(detail.get("victim"), dict):
+                    esi = detail
+            except requests.RequestException:
+                pass
+        if not isinstance(esi.get("victim"), dict):
+            raise ValueError("KB 记录缺少被击杀方详情")
+        return {"killmail_id": killmail_id, "esi": esi, "zkb": zkb}
 
     def query_entity(self, entity_type: str, entity_name: str) -> KbReport | None:
         if entity_type not in {"character", "corporation", "alliance"}:
@@ -176,25 +245,49 @@ class KbClient:
     def _resolve_names(self, entity_ids: list[int]) -> dict[int, str]:
         if not entity_ids:
             return {}
-        response = requests.post(
-            self.esi_names_url,
-            params={"datasource": "tranquility"},
-            json=entity_ids,
-            headers=self.headers,
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        payload = response.json()
-        if not isinstance(payload, list):
+        # ESI requires every ID in a batch to be unique. Keep first-seen order so
+        # callers can pass overlapping identity fields without triggering a 400.
+        unique_ids: list[int] = []
+        seen_ids: set[int] = set()
+        for value in entity_ids:
+            entity_id = self._positive_int(value)
+            if entity_id is not None and entity_id not in seen_ids:
+                seen_ids.add(entity_id)
+                unique_ids.append(entity_id)
+        if not unique_ids:
             return {}
         resolved: dict[int, str] = {}
-        for item in payload:
-            if not isinstance(item, dict):
-                continue
-            entity_id = self._positive_int(item.get("id"))
-            name = str(item.get("name", "")).strip()
-            if entity_id and name:
-                resolved[entity_id] = name
+
+        def fetch(ids: list[int]) -> None:
+            response = requests.post(
+                self.esi_names_url,
+                params={"datasource": "tranquility"},
+                json=ids,
+                headers=self.headers,
+                timeout=self.timeout,
+            )
+            if response.status_code == 400 and len(ids) > 1:
+                # ESI rejects a batch containing a retired/unknown entity ID.
+                # Split only on this validation error so valid participants still resolve.
+                midpoint = len(ids) // 2
+                fetch(ids[:midpoint])
+                fetch(ids[midpoint:])
+                return
+            if response.status_code == 400:
+                return
+            response.raise_for_status()
+            payload = response.json()
+            if not isinstance(payload, list):
+                return
+            for item in payload:
+                if not isinstance(item, dict):
+                    continue
+                entity_id = self._positive_int(item.get("id"))
+                name = str(item.get("name", "")).strip()
+                if entity_id and name:
+                    resolved[entity_id] = name
+
+        fetch(unique_ids)
         return resolved
 
     @staticmethod
