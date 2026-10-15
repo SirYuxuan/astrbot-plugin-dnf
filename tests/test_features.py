@@ -572,6 +572,18 @@ class FeatureTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([call.kwargs["json"] for call in post.call_args_list], [[11, 22], [11], [22]])
         self.assertEqual(names, {11: "Pilot One", 22: "Pilot Two"})
 
+    def test_kb_client_resolves_character_name_with_normalized_spaces(self):
+        client = KbClient()
+        response = Mock()
+        response.json.return_value = {
+            "characters": [{"id": 2124698588, "name": "Yuxan Axiom"}]
+        }
+        response.raise_for_status.return_value = None
+        with patch("plugin.features.kb.client.requests.post", return_value=response) as post:
+            result = client.resolve_character("  Yuxan   Axiom  ")
+        self.assertEqual(result, (2124698588, "Yuxan Axiom"))
+        self.assertEqual(post.call_args.kwargs["json"], ["Yuxan Axiom"])
+
     async def test_kb_recent_query_builds_a_card_with_utc8_location(self):
         feature = self.app.kb
         package = {
@@ -585,14 +597,18 @@ class FeatureTests(unittest.IsolatedAsyncioTestCase):
             "zkb": {"totalValue": 100000, "droppedValue": 50000},
         }
         feature.client.latest_character_killmail = Mock(return_value=package)
+        feature.client.resolve_character = Mock(
+            return_value=(2123456789, "Yuxan Axiom")
+        )
         feature.client.names = Mock(
             return_value={2123456789: "Target Pilot", 30000142: "Jita"}
         )
         feature.renderer.render = Mock(return_value="<html>KB image</html>")
-        reply = await feature.query_recent("/kbk 2123456789", "kills")
+        reply = await feature.query_recent("/kbk Yuxan   Axiom", "kills")
         self.assertIn("Target Pilot", reply.text)
         self.assertIn("2026-10-12 21:40 UTC+8", reply.text)
         self.assertEqual(reply.html, "<html>KB image</html>")
+        feature.client.resolve_character.assert_called_once_with("Yuxan   Axiom")
         feature.client.latest_character_killmail.assert_called_once_with(2123456789, "kills")
         feature.renderer.render.assert_called_once_with(package, "角色最近击杀")
 

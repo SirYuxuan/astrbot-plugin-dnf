@@ -67,20 +67,27 @@ class KbFeature:
         query = re.sub(r"^/?(?:kbk|kbl)(?:\s+|$)", "", message.strip(), count=1).strip()
         if activity not in {"kills", "losses"}:
             return KbImageReply("KB 记录类型无效。")
-        if not re.fullmatch(r"[1-9]\d{0,11}", query):
-            return KbImageReply(f"用法：{command} 角色ID")
-        character_id = int(query)
+        if not query or len(query) > 100:
+            return KbImageReply(f"用法：{command} 角色名")
         title = "角色最近击杀" if activity == "kills" else "角色最近损失"
+        try:
+            identity = await asyncio.to_thread(self.client.resolve_character, query)
+        except (requests.RequestException, ValueError):
+            logger.exception("KB 角色名解析失败: name=%s", query)
+            return KbImageReply("KB 角色名解析失败，请稍后重试。")
+        if identity is None:
+            return KbImageReply(f"未找到角色：{query}\n请检查角色名是否完整，名称支持空格。")
+        character_id, _resolved_name = identity
         try:
             package = await asyncio.to_thread(
                 self.client.latest_character_killmail, character_id, activity
             )
         except (requests.RequestException, ValueError):
-            logger.exception("KB 最近记录查询失败: id=%s activity=%s", character_id, activity)
+            logger.exception("KB 最近记录查询失败: name=%s id=%s activity=%s", query, character_id, activity)
             return KbImageReply("KB 最近记录查询失败，请稍后重试。")
         if package is None:
             kind = "击杀" if activity == "kills" else "损失"
-            return KbImageReply(f"角色 {character_id} 暂无公开的最近{kind}记录。")
+            return KbImageReply(f"角色 {query} 暂无公开的最近{kind}记录。")
         text = await asyncio.to_thread(self._format_recent_text, package, title)
         if self.renderer is None:
             return KbImageReply(text)

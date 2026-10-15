@@ -69,6 +69,12 @@ class KbClient:
     def query(self, character_name: str) -> KbReport | None:
         return self.query_entity("character", character_name)
 
+    def resolve_character(self, character_name: str) -> tuple[int, str] | None:
+        normalized_name = " ".join(character_name.split())
+        if not normalized_name:
+            return None
+        return self._resolve_entity("character", normalized_name)
+
     def names(self, entity_ids: list[int]) -> dict[int, str]:
         return self._resolve_names(entity_ids)
 
@@ -155,7 +161,7 @@ class KbClient:
         return report
 
     def _resolve_character(self, character_name: str) -> tuple[int, str] | None:
-        return self._resolve_entity("character", character_name)
+        return self.resolve_character(character_name)
 
     def _resolve_entity(self, entity_type: str, entity_name: str) -> tuple[int, str] | None:
         response = requests.post(
