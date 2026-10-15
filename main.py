@@ -28,7 +28,7 @@ from .plugin.features.rat.client import EVE_BINDING_HINT
     "yuxuandnf",
     "Sir 丶雨轩",
     "烟雨机器人插件，支持 DNF 金币比例、油价、蛋价和 EVE 查询。",
-    "v1.7",
+    "v1.8",
 )
 class DNF_Plugin(Star):
     """保留历史插件标识及入口类名，兼容已有安装。"""
@@ -92,6 +92,45 @@ class DNF_Plugin(Star):
         yield await query_result(
             event, "info", self.app.info.query, actor_id(event), error_text=EVE_BINDING_HINT
         )
+
+    @filter.command("fitt")
+    async def fitting(self, event):
+        """仅在 QQ 私聊中分步导入 EVE 配置。"""
+        prevent_default_reply(event)
+        stop_event_propagation(event)
+        text = await self.app.fitting.handle(
+            unified_origin(event),
+            actor_id(event),
+            message_text(event),
+            is_private=(
+                getattr(event.get_message_type(), "name", "") == "FRIEND_MESSAGE"
+                and platform_name(event) == "aiocqhttp"
+            ),
+            start=True,
+        )
+        yield event.plain_result(text)
+
+    @filter.event_message_type(filter.EventMessageType.PRIVATE_MESSAGE, priority=100)
+    async def fitting_input(self, event):
+        """优先接收进行中的私聊输入，防止被默认聊天消耗。"""
+        text = message_text(event)
+        if text in {"/fitt", "fitt"} or platform_name(event) != "aiocqhttp":
+            return
+        # 在请求前标记事件，避免导入期间被其他插件或默认 LLM 处理。
+        key = (unified_origin(event), actor_id(event))
+        active = key in self.app.fitting.sessions or key in self.app.fitting.pending
+        if active and (not text.startswith("/") or text == "/cancel"):
+            prevent_default_reply(event)
+            stop_event_propagation(event)
+        reply = await self.app.fitting.handle(
+            *key,
+            text,
+            is_private=True,
+        )
+        if reply is not None:
+            prevent_default_reply(event)
+            stop_event_propagation(event)
+            yield event.plain_result(reply)
 
     @filter.command("tr")
     async def translate(self, event):

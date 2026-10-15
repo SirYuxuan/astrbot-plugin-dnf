@@ -92,7 +92,12 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
                 async def html_render(self, template, data, return_url=True, options=None):
                     return "https://example.test/chart.png"
 
-            modules["astrbot.api.event"].filter = SimpleNamespace(command=command, regex=regex)
+            modules["astrbot.api.event"].filter = SimpleNamespace(
+                command=command,
+                regex=regex,
+                event_message_type=lambda *args, **kwargs: lambda function: function,
+                EventMessageType=SimpleNamespace(PRIVATE_MESSAGE="private"),
+            )
             modules["astrbot.api.message_components"].Plain = lambda text: ("text", text)
             modules["astrbot.api.message_components"].Image = SimpleNamespace(
                 fromFileSystem=lambda path: ("image-file", path),
@@ -132,6 +137,7 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
                             "rat",
                             "subrat",
                             "info",
+                            "fitt",
                             "tr",
                             "nav",
                             "where",
@@ -148,6 +154,36 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
                     )
                     await plugin.initialize()
                     await plugin.initialize()
+                    fitting_event = SimpleNamespace(
+                        message_str="/fitt",
+                        plain_result=lambda text: text,
+                        get_sender_id=lambda: "1718018032",
+                        get_platform_name=lambda: "aiocqhttp",
+                        get_message_type=lambda: SimpleNamespace(name="GROUP_MESSAGE"),
+                        unified_msg_origin="qq:GroupMessage:123",
+                        should_call_llm=Mock(),
+                        stop_event=Mock(),
+                    )
+                    replies = [item async for item in plugin.fitting(fitting_event)]
+                    self.assertIn("仅限私聊", replies[0])
+                    self.assertFalse(plugin.app.fitting.sessions)
+                    fitting_event.get_message_type = lambda: SimpleNamespace(name="FRIEND_MESSAGE")
+                    fitting_event.unified_msg_origin = "qq:FriendMessage:1718018032"
+                    self.assertIn(
+                        "请输入角色名", [x async for x in plugin.fitting(fitting_event)][0]
+                    )
+                    fitting_event.message_str = "角色名"
+                    self.assertIn(
+                        "请发送配置", [x async for x in plugin.fitting_input(fitting_event)][0]
+                    )
+                    plugin.app.fitting.client.import_fitting = Mock()
+                    fitting_event.message_str = "[Rifter, Travel]\nDamage Control II"
+                    self.assertIn(
+                        "导入成功", [x async for x in plugin.fitting_input(fitting_event)][0]
+                    )
+                    plugin.app.fitting.client.import_fitting.assert_called_once_with(
+                        "1718018032", "角色名", "[Rifter, Travel]\nDamage Control II"
+                    )
                     event = SimpleNamespace(
                         message_str="/help",
                         plain_result=lambda text: text,

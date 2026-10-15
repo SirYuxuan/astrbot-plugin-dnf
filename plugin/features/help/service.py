@@ -15,6 +15,8 @@ class HelpFeature:
         "订阅或取消每天 23:50 的 RAT 私聊报告\n"
         "/info\n"
         "查询 EVE 绑定信息（需在管理系统注册）\n"
+        "/fitt\n"
+        "仅 QQ 私聊：依次输入角色名、EFT 配置导入；/cancel 取消\n"
         "/tr raven\n"
         "翻译 EVE 中英文名称（可用 kind=type 筛选）\n"
         "/nav ALL 吉他\n"

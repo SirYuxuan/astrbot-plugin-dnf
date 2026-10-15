@@ -18,6 +18,8 @@ from .features.eve.sde import SdeUpdater
 from .features.eve.service import EveFeature
 from .features.eve_dt.client import EveStatusClient
 from .features.eve_dt.service import EveDowntimeFeature
+from .features.fitting.client import FittingClient
+from .features.fitting.service import FittingFeature
 from .features.fleet.client import FleetInviteClient
 from .features.fleet.service import FleetFeature
 from .features.gold.service import GoldFeature
@@ -48,6 +50,7 @@ class PluginApplication:
     def __init__(self, config: PluginConfig, store: JsonFileStore, notifier: GroupNotifier):
         self.gold = GoldFeature(config, store, notifier)
         self.help = HelpFeature()
+        self.fitting = FittingFeature(FittingClient())
         self.oil = OilFeature(config, store, notifier)
         self.egg = EggFeature(config, store, notifier)
         self.rat = RatFeature(

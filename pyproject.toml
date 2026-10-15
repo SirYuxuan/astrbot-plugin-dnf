@@ -1,6 +1,6 @@
 [project]
 name = "astrbot-plugin-dnf"
-version = "1.7.0"
+version = "1.8.0"
 description = "AstrBot 查询插件：DNF 金币比例、油价、蛋价及 EVE 查询"
 requires-python = ">=3.10"
 dependencies = ["redis", "requests"]
