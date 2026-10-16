@@ -201,9 +201,22 @@ class DNF_Plugin(Star):
         """按角色、军团或联盟名称查询 zKillboard 战绩。"""
         yield await query_result(event, "KB", self.app.kb.query, message_text(event))
 
+    @filter.command("kbinfo")
+    async def kb_info(self, event):
+        """按角色名生成公开战力报告图片。"""
+        prevent_default_reply(event)
+        yield event.plain_result("正在查询角色战力数据，请稍候……")
+        yield await html_card_result(
+            event,
+            "KB 角色战力",
+            self.app.kb.query_info,
+            message_text(event),
+            html_renderer=self.html_render,
+        )
+
     @filter.command("kbk")
     async def kb_kills(self, event):
-        """按角色 ID 获取最近一次击杀并渲染战报图片。"""
+        """按角色名获取最近一次击杀并渲染战报图片。"""
         prevent_default_reply(event)
         yield event.plain_result("正在查询击毁数据，请稍候……")
         yield await html_card_result(
@@ -217,7 +230,7 @@ class DNF_Plugin(Star):
 
     @filter.command("kbl")
     async def kb_losses(self, event):
-        """按角色 ID 获取最近一次损失并渲染战报图片。"""
+        """按角色名获取最近一次损失并渲染战报图片。"""
         prevent_default_reply(event)
         yield event.plain_result("正在查询损失数据，请稍候……")
         yield await html_card_result(

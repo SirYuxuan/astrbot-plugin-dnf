@@ -156,6 +156,7 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
                             "ship",
                             "train",
                             "kb",
+                            "kbinfo",
                             "kbk",
                             "kbl",
                             "subkb",

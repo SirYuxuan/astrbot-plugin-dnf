@@ -9,6 +9,8 @@ from dataclasses import dataclass
 import requests
 
 from .client import KbClient, KbReport
+from .profile_client import KbProfileClient
+from .profile_renderer import KbProfileRenderer
 from .renderer import KbKillmailRenderer
 
 logger = logging.getLogger(__name__)
@@ -21,11 +23,39 @@ class KbImageReply:
 
 
 class KbFeature:
-    def __init__(
-        self, client: KbClient, renderer: KbKillmailRenderer | None = None
-    ) -> None:
+    def __init__(self, client: KbClient, renderer: KbKillmailRenderer | None = None) -> None:
         self.client = client
         self.renderer = renderer
+        self.profile_client = KbProfileClient(client)
+        self.profile_renderer = KbProfileRenderer(renderer.catalog) if renderer else None
+
+    async def query_info(self, message: str) -> KbImageReply:
+        name = re.sub(r"^/?kbinfo(?:\s+|$)", "", message.strip(), count=1).strip()
+        if not name or len(name) > 100:
+            return KbImageReply("用法：/kbinfo 角色名，例如 /kbinfo Yuxan Axiom")
+        try:
+            data = await asyncio.to_thread(self.profile_client.query, name)
+        except (requests.RequestException, ValueError):
+            logger.exception("KBINFO 数据查询失败: name=%s", name)
+            return KbImageReply("角色战力数据查询失败，请稍后重试。")
+        if data is None:
+            return KbImageReply(f"未找到角色：{name}\n请检查角色名是否完整，名称支持空格。")
+        stats = data["stats"]
+        text = (
+            f"【角色战力报告】{data['identity'][1]}\n"
+            f"击毁：{stats.get('shipsDestroyed', 0)}｜损失：{stats.get('shipsLost', 0)}\n"
+            f"ISK 摧毁：{self._format_isk(stats.get('iskDestroyed', 0))}\n"
+            f"ISK 损失：{self._format_isk(stats.get('iskLost', 0))}\n"
+            f"https://zkillboard.com/character/{data['identity'][0]}/"
+        )
+        if self.profile_renderer is None:
+            return KbImageReply(text)
+        try:
+            markup = await asyncio.to_thread(self.profile_renderer.render, data)
+        except Exception:
+            logger.exception("KBINFO 图片构造失败: name=%s", name)
+            return KbImageReply(text)
+        return KbImageReply(text, markup)
 
     async def query(self, message: str) -> str:
         query = re.sub(r"^/?kb(?:\s+|$)", "", message.strip(), count=1).strip()
@@ -83,7 +113,9 @@ class KbFeature:
                 self.client.latest_character_killmail, character_id, activity
             )
         except (requests.RequestException, ValueError):
-            logger.exception("KB 最近记录查询失败: name=%s id=%s activity=%s", query, character_id, activity)
+            logger.exception(
+                "KB 最近记录查询失败: name=%s id=%s activity=%s", query, character_id, activity
+            )
             return KbImageReply("KB 最近记录查询失败，请稍后重试。")
         if package is None:
             kind = "击杀" if activity == "kills" else "损失"
@@ -150,9 +182,7 @@ class KbFeature:
 
     @classmethod
     def format_report(cls, report: KbReport) -> str:
-        label = {"character": "角色", "corporation": "军团", "alliance": "联盟"}[
-            report.entity_type
-        ]
+        label = {"character": "角色", "corporation": "军团", "alliance": "联盟"}[report.entity_type]
         title = "KB 查询" if report.entity_type == "character" else f"{label} KB"
         detail_url = f"https://zkillboard.com/{report.entity_type}/{report.character_id}/"
         if not report.has_activity:
