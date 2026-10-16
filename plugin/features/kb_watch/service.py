@@ -154,10 +154,10 @@ class KbWatchFeature(MonitorFeature):
             self._is_restricted_loss, package, corporation_event, alliance_event
         )
         matched = False
-        private_event = (corporation_event or alliance_event) if restricted_loss else corporation_event
-        recipients = (
-            [self.YUXAN_LOSS_RECIPIENT] if restricted_loss else self.subscribers
+        private_event = (
+            (corporation_event or alliance_event) if restricted_loss else corporation_event
         )
+        recipients = [self.YUXAN_LOSS_RECIPIENT] if restricted_loss else self.subscribers
         if private_event and recipients:
             matched = True
             await self._send_private_record(package, private_event, recipients)
@@ -260,7 +260,7 @@ class KbWatchFeature(MonitorFeature):
                     markup,
                     {},
                     return_url=False,
-                    options={"type": "png", "full_page": True, "omit_background": True},
+                    options=self.renderer.image_render_options(markup),
                 )
                 rendered = str(rendered or "")
             except Exception:

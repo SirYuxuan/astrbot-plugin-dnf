@@ -569,15 +569,15 @@ class FeatureTests(unittest.IsolatedAsyncioTestCase):
             side_effect=[rejected, left, right],
         ) as post:
             names = client.names([11, 22])
-        self.assertEqual([call.kwargs["json"] for call in post.call_args_list], [[11, 22], [11], [22]])
+        self.assertEqual(
+            [call.kwargs["json"] for call in post.call_args_list], [[11, 22], [11], [22]]
+        )
         self.assertEqual(names, {11: "Pilot One", 22: "Pilot Two"})
 
     def test_kb_client_resolves_character_name_with_normalized_spaces(self):
         client = KbClient()
         response = Mock()
-        response.json.return_value = {
-            "characters": [{"id": 2124698588, "name": "Yuxan Axiom"}]
-        }
+        response.json.return_value = {"characters": [{"id": 2124698588, "name": "Yuxan Axiom"}]}
         response.raise_for_status.return_value = None
         with patch("plugin.features.kb.client.requests.post", return_value=response) as post:
             result = client.resolve_character("  Yuxan   Axiom  ")
@@ -597,12 +597,8 @@ class FeatureTests(unittest.IsolatedAsyncioTestCase):
             "zkb": {"totalValue": 100000, "droppedValue": 50000},
         }
         feature.client.latest_character_killmail = Mock(return_value=package)
-        feature.client.resolve_character = Mock(
-            return_value=(2123456789, "Yuxan Axiom")
-        )
-        feature.client.names = Mock(
-            return_value={2123456789: "Target Pilot", 30000142: "Jita"}
-        )
+        feature.client.resolve_character = Mock(return_value=(2123456789, "Yuxan Axiom"))
+        feature.client.names = Mock(return_value={2123456789: "Target Pilot", 30000142: "Jita"})
         feature.renderer.render = Mock(return_value="<html>KB image</html>")
         reply = await feature.query_recent("/kbk Yuxan   Axiom", "kills")
         self.assertIn("Target Pilot", reply.text)
@@ -659,9 +655,45 @@ class FeatureTests(unittest.IsolatedAsyncioTestCase):
         markup = renderer.render(package, "角色最近击杀")
         self.assertIn("2026-10-12 21:40:00 UTC+8", markup)
         self.assertIn('<strong class="location">Jita</strong>', markup)
-        self.assertIn("class=\"final\">最后一击", markup)
+        self.assertIn('class="final">最后一击', markup)
         self.assertIn("毒蜥级 / 鞭挞重型导弹", markup)
         self.assertIn("掉落 ×1", markup)
+
+    def test_kb_image_renderer_expands_long_reports_with_bounded_rows_and_crop(self):
+        renderer = self.app.kb.renderer
+        renderer.client.names = Mock(return_value={})
+        package = {
+            "esi": {
+                "victim": {
+                    "items": [
+                        {"item_type_id": index + 1, "quantity_dropped": 1} for index in range(105)
+                    ]
+                },
+                "attackers": [
+                    {"character_id": index + 1, "damage_done": 100} for index in range(55)
+                ],
+            },
+            "zkb": {},
+        }
+
+        markup = renderer.render(package, "角色最近击杀")
+
+        self.assertEqual(markup.count('<article class="person">'), 50)
+        self.assertEqual(markup.count('<div class="item">'), 100)
+        self.assertIn("其余 5 名参与者未展开", markup)
+        self.assertIn("另有 5 项物品未展开", markup)
+        self.assertIn('name="astrbot-render-size" content="760x4268"', markup)
+        self.assertEqual(
+            renderer.image_render_options(markup),
+            {
+                "type": "png",
+                "full_page": False,
+                "omit_background": True,
+                "viewport_width": 760,
+                "viewport_height": 4268,
+                "clip": {"x": 0, "y": 0, "width": 760, "height": 4268},
+            },
+        )
 
     def test_kb_client_resolves_character_stats_and_affiliations(self):
         client = KbClient(cache_seconds=600)

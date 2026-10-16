@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import datetime as dt
 import html
+import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,8 @@ class KbKillmailRenderer:
 
     _BEIJING = dt.timezone(dt.timedelta(hours=8))
     _FONT_PATH = Path(__file__).parents[1] / "eve" / "assets" / "CangErJinKai02-W04.woff2"
+    MAX_VISIBLE_ATTACKERS = 50
+    MAX_VISIBLE_ITEMS = 100
 
     def __init__(self, client: KbClient, catalog: EveCatalog):
         self.client = client
@@ -29,7 +32,7 @@ class KbKillmailRenderer:
         attackers = esi.get("attackers") if isinstance(esi.get("attackers"), list) else []
         attackers = [item for item in attackers if isinstance(item, dict)]
         attackers.sort(key=lambda item: self._integer(item.get("damage_done")), reverse=True)
-        shown_attackers = attackers[:8]
+        shown_attackers = attackers[: self.MAX_VISIBLE_ATTACKERS]
         system_id = self._integer(esi.get("solar_system_id"))
         victim_ids = self._identity_ids(victim)
         attacker_ids = [self._identity_ids(item) for item in shown_attackers]
@@ -52,21 +55,23 @@ class KbKillmailRenderer:
             if isinstance(package.get("zkb"), dict)
             else 0
         )
+        dropped_value = self._number(
+            package.get("zkb", {}).get("droppedValue")
+            if isinstance(package.get("zkb"), dict)
+            else 0
+        )
         event_time = self._parse_time(str(esi.get("killmail_time", "")))
         items = victim.get("items") if isinstance(victim.get("items"), list) else []
         all_item_rows = [item for item in items if isinstance(item, dict)]
-        item_rows = all_item_rows[:16]
+        item_rows = all_item_rows[: self.MAX_VISIBLE_ITEMS]
 
         participants = "".join(
-            self._participant_row(item, names, total_damage)
-            for item in shown_attackers
+            self._participant_row(item, names, total_damage) for item in shown_attackers
         )
         if not participants:
             participants = '<div class="no-data">暂无参与者详情</div>'
         if len(attackers) > len(shown_attackers):
-            participants += (
-                f'<div class="more">其余 {len(attackers) - len(shown_attackers)} 名参与者未展开</div>'
-            )
+            participants += f'<div class="more">其余 {len(attackers) - len(shown_attackers)} 名参与者未展开</div>'
         equipment = "".join(self._item_row(item) for item in item_rows)
         if not equipment:
             equipment = '<div class="no-data">无装备明细</div>'
@@ -88,9 +93,21 @@ class KbKillmailRenderer:
         item_count = len(all_item_rows)
         participant_count = len(attackers)
         font_url = self._font_data_url()
+        participant_rows_height = len(shown_attackers) * 80 if shown_attackers else 46
+        equipment_rows_height = len(item_rows) * 33 if item_rows else 46
+        if len(attackers) > len(shown_attackers):
+            participant_rows_height += 27
+        if len(all_item_rows) > len(item_rows):
+            equipment_rows_height += 27
+        columns_height = max(
+            34 + 20 + participant_rows_height,
+            34 + equipment_rows_height,
+        )
+        render_height = 2 + 160 + columns_height + 25
         return f"""<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=760,initial-scale=1">
+<meta name="astrbot-render-size" content="760x{render_height}">
 <style>
 @font-face{{font-family:CangErJinKai;src:url('{font_url}') format('woff2');font-display:block}}
 :root{{--bg:#17191f;--head:#24222b;--bar:#34313d;--line:#4c4755;--text:#f3f0f4;--muted:#aaa5b1;--blue:#68a9ee;--green:#8fd7b5;--red:#ee8b86;--gold:#eac37d}}
@@ -110,18 +127,39 @@ body{{font-family:CangErJinKai,'PingFang SC','Microsoft YaHei',sans-serif;color:
 .col-head{{min-height:34px;padding:0 12px;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(90deg,#3b3745,#312f39);border-bottom:1px solid #58515f;font-size:14px;font-weight:700;color:#f2eff4;letter-spacing:.2px}}.count{{margin-left:4px;font-size:12px;color:#bbb2c2;font-weight:400}}
 .damage-total{{font-size:12px;color:#e9a59b;font-weight:400;white-space:nowrap}}.damage-total b{{margin-left:3px;color:#f4b4a6;font-size:14px}}
 .last-hit{{height:20px;padding:1px 12px;color:#d8d2db;font-size:12px;line-height:18px;background:#1a1b21;border-bottom:1px solid #3b3944}}.last-hit:before{{content:'';display:inline-block;width:5px;height:5px;margin:0 6px 2px 0;border-radius:50%;background:#e58b84}}
-.people,.equipment{{background:#15171d}}.person{{display:flex;gap:6px;min-height:76px;padding:6px 9px;border-bottom:1px solid #393741;background:linear-gradient(100deg,#23232c,#191a20 78%)}}
+.people,.equipment{{background:#15171d}}.person{{display:flex;gap:6px;height:80px;padding:6px 9px;border-bottom:1px solid #393741;background:linear-gradient(100deg,#23232c,#191a20 78%)}}
 .avatar{{width:56px;height:56px;object-fit:cover;flex:none;border:1px solid #665e6d;border-radius:6px;background:#25232b;box-shadow:0 2px 8px #0007}}.avatar-fallback{{display:flex;align-items:center;justify-content:center;color:#a9a2b0;font-size:10px}}
 .icons{{width:28px;height:56px;display:flex;flex-direction:column;gap:4px;flex:none}}.icons img{{width:28px;height:26px;object-fit:cover;border:1px solid #625969;border-radius:4px;background:#25232c}}
 .person-main{{min-width:0;flex:1}}.name{{height:19px;line-height:19px;font-size:14px;font-weight:700;color:#f2eff4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}.final{{display:inline-block;margin-left:4px;padding:0 5px;border:1px solid #a35d5c;border-radius:8px;background:#713a4140;color:#f4aaa3;font-size:11px;line-height:15px;vertical-align:1px;font-weight:400}}
 .shipline{{height:18px;line-height:18px;font-size:12px;color:#ddd6e1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}.meta{{height:13px;line-height:13px;font-size:11px;color:#aaa4b1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}.damage{{height:17px;line-height:17px;font-size:12px;color:#b0aeba;white-space:nowrap}}.damage b{{color:var(--gold);font-size:13px}}.damage .pct{{color:#c5bfca;margin-left:4px}}
 .item{{height:33px;display:flex;align-items:center;gap:7px;padding:3px 13px;border-bottom:1px solid #35343d;color:#ddd8e0;font-size:12px}}.item img{{width:26px;height:26px;object-fit:cover;border:1px solid #5b5363;border-radius:4px;background:#25232c;flex:none}}.item-name{{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}.item-qty{{color:#c1bac7;font-size:11px;white-space:nowrap}}.drop{{color:var(--green)}}.destroy{{color:var(--red)}}
-.no-data{{padding:10px 15px;color:#afa8b4;font-size:13px}}.more{{padding:6px 12px;color:#aaa3af;font-size:11px;text-align:center;border-bottom:1px solid #393741}}
+.no-data{{height:46px;padding:10px 15px;display:flex;align-items:center;color:#afa8b4;font-size:13px}}.more{{height:27px;padding:5px 12px;display:flex;align-items:center;justify-content:center;line-height:16px;color:#aaa3af;font-size:11px;text-align:center;border-bottom:1px solid #393741}}
 .total{{height:25px;padding:0 14px;display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:center;background:linear-gradient(90deg,#293a37,#37303d);border-top:1px solid #5a5360;color:#d0c9d2;font-size:12px;line-height:20px}}.total b{{color:var(--green)}}.total .value{{color:var(--gold);font-weight:700}}.byline{{justify-self:end;color:#d6c8da;font-size:11px;letter-spacing:.3px}}
 </style></head><body><main class="report">
-<header class="hero"><img class="portrait" src="{portrait_url}" alt="被击杀角色"><div class="ship"><img src="{ship_url}" alt="{safe_ship_name}">{safe_ship_name}</div><div class="summary"><h1>{safe_victim_name}</h1><div class="org">{self._logo(corp_url, '军团')}<span>{safe_corp}</span>{self._logo(alliance_url, '联盟', True)}<span>{safe_alliance}</span></div><div class="event">{safe_title}</div><div class="time">{event_time} · 地点：<strong class="location">{safe_system}</strong></div><div class="loss">损失装备 <b>{self._format_isk(value)}</b></div></div></header>
+<header class="hero"><img class="portrait" src="{portrait_url}" alt="被击杀角色"><div class="ship"><img src="{ship_url}" alt="{safe_ship_name}">{safe_ship_name}</div><div class="summary"><h1>{safe_victim_name}</h1><div class="org">{self._logo(corp_url, "军团")}<span>{safe_corp}</span>{self._logo(alliance_url, "联盟", True)}<span>{safe_alliance}</span></div><div class="event">{safe_title}</div><div class="time">{event_time} · 地点：<strong class="location">{safe_system}</strong></div><div class="loss">损失装备 <b>{self._format_isk(value)}</b></div></div></header>
 <main class="columns"><section class="panel participants"><div class="col-head"><span>参与者<span class="count">({participant_count})</span></span><span class="damage-total">共受到伤害：<b>{total_damage:,}</b></span></div><div class="last-hit">最后一击</div><div class="people">{participants}</div></section><section class="panel equipment"><div class="col-head"><span>装备与明细<span class="count">({item_count})</span></span><span class="action">掉落 / 损毁</span></div>{equipment}</section></main>
-<footer class="total"><span>总掉落: <b>{self._format_isk(self._number((package.get('zkb') or {{}}).get('droppedValue')) if isinstance(package.get('zkb'), dict) else 0)}</b></span><span>总价值: <span class="value">{self._format_isk(value)}</span></span><span class="byline">By: 烟雨机器人</span></footer></main></body></html>"""
+<footer class="total"><span>总掉落: <b>{self._format_isk(dropped_value)}</b></span><span>总价值: <span class="value">{self._format_isk(value)}</span></span><span class="byline">By: 烟雨机器人</span></footer></main></body></html>"""
+
+    @staticmethod
+    def image_render_options(markup: str) -> dict[str, Any]:
+        """Return a tightly clipped T2I viewport for cards with a declared size."""
+        match = re.search(
+            r'<meta\s+name="astrbot-render-size"\s+content="(\d+)x(\d+)"\s*/?>',
+            markup,
+        )
+        if match is None:
+            return {"type": "png", "full_page": True, "omit_background": True}
+        width, height = (int(value) for value in match.groups())
+        if width <= 0 or height <= 0:
+            return {"type": "png", "full_page": True, "omit_background": True}
+        return {
+            "type": "png",
+            "full_page": False,
+            "omit_background": True,
+            "viewport_width": width,
+            "viewport_height": height,
+            "clip": {"x": 0, "y": 0, "width": width, "height": height},
+        }
 
     def _participant_row(
         self,
@@ -238,6 +276,8 @@ body{{font-family:CangErJinKai,'PingFang SC','Microsoft YaHei',sans-serif;color:
     @lru_cache(maxsize=1)
     def _font_data_url(cls) -> str:
         try:
-            return "data:font/woff2;base64," + base64.b64encode(cls._FONT_PATH.read_bytes()).decode("ascii")
+            return "data:font/woff2;base64," + base64.b64encode(cls._FONT_PATH.read_bytes()).decode(
+                "ascii"
+            )
         except OSError:
             return ""

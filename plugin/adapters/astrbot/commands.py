@@ -8,6 +8,8 @@ from pathlib import Path
 
 from astrbot.api import logger
 
+from ...features.kb.renderer import KbKillmailRenderer
+
 _CHART_RENDER_CACHE_SECONDS = 600
 _chart_render_cache: dict[str, tuple[float, str]] = {}
 _chart_render_flights: dict[str, asyncio.Task[str]] = {}
@@ -190,7 +192,7 @@ async def _render_chart_once(
         # the public T2I URL makes the downstream platform fetch a short-lived URL
         # itself; some OneBot deployments cannot reach it and silently drop the image.
         return_url=False,
-        options={"type": "png", "full_page": True, "omit_background": True},
+        options=KbKillmailRenderer.image_render_options(chart_html),
     )
     if not rendered:
         return ""
