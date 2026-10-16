@@ -286,20 +286,21 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
                     plugin.html_render = AsyncMock(return_value="/tmp/kb.png")
                     self.assertEqual(
                         [item async for item in plugin.kb_kills(event)],
-                        [[("image-file", "/tmp/kb.png")]],
+                        [
+                            "正在查询击毁数据，请稍候……",
+                            [("image-file", "/tmp/kb.png")],
+                        ],
                     )
-                    plugin.app.kb.query_recent.assert_awaited_once_with(
-                        "/kbk 2124698588", "kills"
-                    )
+                    plugin.app.kb.query_recent.assert_awaited_once_with("/kbk 2124698588", "kills")
                     event.message_str = "/kbl 2124698588"
-                    plugin.app.kb.query_recent = AsyncMock(return_value=SimpleNamespace(text="KB 最近损失", html=""))
+                    plugin.app.kb.query_recent = AsyncMock(
+                        return_value=SimpleNamespace(text="KB 最近损失", html="")
+                    )
                     self.assertEqual(
                         [item async for item in plugin.kb_losses(event)],
-                        ["KB 最近损失"],
+                        ["正在查询损失数据，请稍候……", "KB 最近损失"],
                     )
-                    plugin.app.kb.query_recent.assert_awaited_once_with(
-                        "/kbl 2124698588", "losses"
-                    )
+                    plugin.app.kb.query_recent.assert_awaited_once_with("/kbl 2124698588", "losses")
                     plugin.app.kb_watch.toggle = AsyncMock(return_value="订阅成功")
                     event.message_str = "/subkb"
                     event.get_group_id = lambda: "123456"

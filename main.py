@@ -205,6 +205,7 @@ class DNF_Plugin(Star):
     async def kb_kills(self, event):
         """按角色 ID 获取最近一次击杀并渲染战报图片。"""
         prevent_default_reply(event)
+        yield event.plain_result("正在查询击毁数据，请稍候……")
         yield await html_card_result(
             event,
             "KB 最近击杀",
@@ -218,6 +219,7 @@ class DNF_Plugin(Star):
     async def kb_losses(self, event):
         """按角色 ID 获取最近一次损失并渲染战报图片。"""
         prevent_default_reply(event)
+        yield event.plain_result("正在查询损失数据，请稍候……")
         yield await html_card_result(
             event,
             "KB 最近损失",
