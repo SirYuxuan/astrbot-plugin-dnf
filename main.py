@@ -46,6 +46,25 @@ class DNF_Plugin(Star):
     async def initialize(self) -> None:
         await self.app.runtime.start()
 
+    @filter.command("add")
+    async def qa_add(self, event):
+        """添加或更新自定义问答：/add .xx 解答内容。"""
+        prevent_default_reply(event)
+        stop_event_propagation(event)
+        yield await query_result(event, "问答保存", self.app.qa.add, message_text(event))
+
+    @filter.regex(r"^\s*\.")
+    async def qa_answer(self, event):
+        """精确匹配已保存的问题，未命中时不干预其他消息。"""
+        key = (unified_origin(event), actor_id(event))
+        if key in self.app.fitting.sessions or key in self.app.fitting.pending:
+            return
+        answer = self.app.qa.answer(message_text(event))
+        if answer is not None:
+            prevent_default_reply(event)
+            stop_event_propagation(event)
+            yield event.plain_result(answer)
+
     @filter.command("help")
     async def help(self, event):
         """显示烟雨机器人插件指令帮助。"""

@@ -34,6 +34,7 @@ from .features.kb_watch.service import KbWatchFeature
 from .features.navigation.client import WaypointClient
 from .features.navigation.service import NavigationFeature
 from .features.oil.service import OilFeature
+from .features.qa.service import QaFeature
 from .features.rat.client import RatClient
 from .features.rat.service import RatFeature, RatSubscriptionFeature
 from .features.ship.client import ShipClient
@@ -51,6 +52,7 @@ class PluginApplication:
     def __init__(self, config: PluginConfig, store: JsonFileStore, notifier: GroupNotifier):
         self.gold = GoldFeature(config, store, notifier)
         self.help = HelpFeature()
+        self.qa = QaFeature(store)
         self.fitting = FittingFeature(FittingClient())
         self.oil = OilFeature(config, store, notifier)
         self.egg = EggFeature(config, store, notifier)

@@ -139,6 +139,8 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(
                         commands,
                         [
+                            "add",
+                            r"^\s*\.",
                             "help",
                             "status",
                             "金币比例",
@@ -167,6 +169,25 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
                     )
                     await plugin.initialize()
                     await plugin.initialize()
+                    qa_event = SimpleNamespace(
+                        message_str="/add .xx 解答  答\n第二行",
+                        plain_result=lambda text: text,
+                        should_call_llm=Mock(),
+                        stop_event=Mock(),
+                    )
+                    self.assertEqual(
+                        [x async for x in plugin.qa_add(qa_event)], ["已添加问答：.xx"]
+                    )
+                    qa_event.message_str = ".xx"
+                    qa_event.stop_event.reset_mock()
+                    self.assertEqual(
+                        [x async for x in plugin.qa_answer(qa_event)], ["解答  答\n第二行"]
+                    )
+                    qa_event.stop_event.assert_called_once_with()
+                    qa_event.stop_event.reset_mock()
+                    qa_event.message_str = ".不存在"
+                    self.assertEqual([x async for x in plugin.qa_answer(qa_event)], [])
+                    qa_event.stop_event.assert_not_called()
                     fitting_event = SimpleNamespace(
                         message_str="/fitt",
                         plain_result=lambda text: text,
