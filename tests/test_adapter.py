@@ -152,6 +152,7 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
                             "fitt",
                             "tr",
                             "nav",
+                            "navrs",
                             "where",
                             "fleet",
                             "timer",

@@ -48,6 +48,42 @@ class NavigationFeature:
         except ValueError:
             return "EVE 导航接口返回了无效数据，请稍后重试。"
 
+    async def security_agents(self, command: str, qq: str) -> str:
+        text = re.sub(r"^/?navrs(?:\s+|$)", "", command.strip(), count=1).strip()
+        character_name = text or None
+        if character_name is not None and character_name.casefold() == "all":
+            character_name = "ALL"
+        if character_name == ".":
+            return "用法：/navrs [角色名]；不传角色名时为 QQ 绑定的全部角色设置安全代理。"
+        if not re.fullmatch(r"[1-9]\d{4,11}", qq.strip()):
+            return "无法获取有效的用户 QQ"
+        try:
+            data = await asyncio.to_thread(
+                self.client.set_security_agents, qq.strip(), character_name
+            )
+            characters = data.get("characters")
+            if isinstance(characters, list):
+                lines = ["安全代理设置结果："]
+                for item in characters:
+                    if isinstance(item, dict):
+                        name = str(
+                            item.get("characterName") or item.get("characterId") or "未知角色"
+                        )
+                        detail = str(item.get("message") or "设置完成").strip()
+                        lines.append(
+                            f"{'✅' if item.get('success') is True else '❌'} {name}：{detail}"
+                        )
+                if len(lines) > 1:
+                    return "\n".join(lines)
+            message = str(data.get("message") or "").strip()
+            return message or ("安全代理设置请求已提交。" if not data else str(data))
+        except WaypointApiError as error:
+            return self._format_error(error).replace("导航", "安全代理")
+        except requests.RequestException:
+            return "安全代理接口暂时不可用，请稍后重试。"
+        except ValueError:
+            return "安全代理接口返回了无效数据，请稍后重试。"
+
     @staticmethod
     def _format_error(error: WaypointApiError) -> str:
         message = error.message.strip()

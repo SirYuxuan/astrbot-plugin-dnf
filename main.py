@@ -171,6 +171,17 @@ class DNF_Plugin(Star):
             actor_id(event),
         )
 
+    @filter.command("navrs")
+    async def navigation_security_agents(self, event):
+        """为绑定的全部角色或指定角色设置安全代理。"""
+        yield await query_result(
+            event,
+            "EVE 安全代理",
+            self.app.navigation.security_agents,
+            message_text(event),
+            actor_id(event),
+        )
+
     @filter.command("where")
     async def where(self, event):
         """按发送者 QQ 搜索已同步的 EVE 资产。"""

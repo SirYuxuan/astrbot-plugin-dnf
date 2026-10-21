@@ -85,3 +85,45 @@ class NavigationTests(unittest.IsolatedAsyncioTestCase):
 
         with patch("plugin.features.navigation.client.requests.post", side_effect=requests.Timeout):
             self.assertIn("暂时不可用", await self.feature.query("/nav ALL 吉他", "1718018032"))
+
+    async def test_security_agents_all_and_specific_character(self):
+        response = Mock(ok=True, status_code=200)
+        response.json.return_value = {"code": 0, "data": {"message": "设置成功"}}
+        with patch(
+            "plugin.features.navigation.client.requests.post", return_value=response
+        ) as post:
+            result = await self.feature.security_agents("/navrs", "1718018032")
+        self.assertEqual(result, "设置成功")
+        post.assert_called_once_with(
+            "https://admin-api.oofo.cc/game/eve/public/users/by-qq/1718018032/waypoint/security-agents",
+            json={"characterName": "ALL"},
+            timeout=15,
+        )
+        with patch(
+            "plugin.features.navigation.client.requests.post", return_value=response
+        ) as post:
+            result = await self.feature.security_agents("/navrs Yuxan Axiom", "1718018032")
+        self.assertEqual(result, "设置成功")
+        self.assertEqual(post.call_args.kwargs["json"], {"characterName": "Yuxan Axiom"})
+
+    async def test_security_agents_validate_id_qq_and_partial_results(self):
+        with patch("plugin.features.navigation.client.requests.post") as post:
+            self.assertIn("用法", await self.feature.security_agents("/navrs .", "1718018032"))
+            self.assertIn(
+                "无法获取有效的用户 QQ", await self.feature.security_agents("/navrs", "bad")
+            )
+            post.assert_not_called()
+        response = Mock(ok=True, status_code=200)
+        response.json.return_value = {
+            "code": 0,
+            "data": {
+                "characters": [
+                    {"characterName": "Pilot One", "success": True, "message": "已设置"},
+                    {"characterName": "Pilot Two", "success": False, "message": "需授权"},
+                ]
+            },
+        }
+        with patch("plugin.features.navigation.client.requests.post", return_value=response):
+            result = await self.feature.security_agents("/navrs", "1718018032")
+        self.assertIn("✅ Pilot One：已设置", result)
+        self.assertIn("❌ Pilot Two：需授权", result)
