@@ -100,7 +100,8 @@ class ProfileRendererTests(unittest.TestCase):
         self.assertEqual(markup.count('class="km-row"'), 2)
         opts = KbKillmailRenderer.image_render_options(markup)
         self.assertEqual(opts["viewport_width"], 748)
-        self.assertFalse(opts["full_page"])
+        self.assertTrue(opts["full_page"])
+        self.assertNotIn("clip", opts)
 
     def test_empty_activity_and_partial_history_do_not_break_card(self):
         data = profile()

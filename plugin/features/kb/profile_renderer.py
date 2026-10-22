@@ -202,27 +202,9 @@ class KbProfileRenderer:
                 + esc("；".join(data["warnings"]))
                 + "</div>",
             )
-        height = (
-            2
-            + 757
-            + 176
-            + 61
-            + 60
-            + 5 * 27
-            + 9
-            + 43 * min(8, len(hist))
-            + 39
-            + 234
-            + 182
-            + 123
-            + 286
-            + 35 * max(1, min(10, len(records)))
-            + 29
-            + (28 if data.get("warnings") else 0)
-        )
         css = Path(__file__).with_name("profile.css").read_text()
         font = KbKillmailRenderer._font_data_url()
-        head = f"""<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=748,initial-scale=1"><meta name="astrbot-render-size" content="748x{height}"><title>KBINFO 角色战力报告</title><style>@font-face{{font-family:CangEr;src:url('{font}') format('woff2');font-display:block}}{css}</style></head>"""
+        head = f"""<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=748,initial-scale=1"><meta name="astrbot-render-size" content="748xauto"><title>KBINFO 角色战力报告</title><style>@font-face{{font-family:CangEr;src:url('{font}') format('woff2');font-display:block}}{css}</style></head>"""
         return head + "<body>" + "".join(out)
 
     @staticmethod

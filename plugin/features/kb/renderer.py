@@ -143,6 +143,17 @@ body{{font-family:CangErJinKai,'PingFang SC','Microsoft YaHei',sans-serif;color:
     @staticmethod
     def image_render_options(markup: str) -> dict[str, Any]:
         """Return a tightly clipped T2I viewport for cards with a declared size."""
+        auto = re.search(
+            r'<meta\s+name="astrbot-render-size"\s+content="(\d+)xauto"\s*/?>', markup
+        )
+        if auto and 100 <= int(auto.group(1)) <= 4096:
+            return {
+                "type": "png",
+                "full_page": True,
+                "omit_background": True,
+                "viewport_width": int(auto.group(1)),
+                "viewport_height": 600,
+            }
         match = re.search(
             r'<meta\s+name="astrbot-render-size"\s+content="(\d+)x(\d+)"\s*/?>',
             markup,
