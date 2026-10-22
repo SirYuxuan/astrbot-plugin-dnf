@@ -5,6 +5,7 @@ import datetime as dt
 import html
 from pathlib import Path
 
+from .assessment import build_assessment
 from .renderer import KbKillmailRenderer
 
 
@@ -84,8 +85,11 @@ class KbProfileRenderer:
             out.append(
                 f'<div class="rating">{label}<strong style="color:{color}">{v}</strong><div class="track"><i style="width:{min(100, max(0, w))}%;background:{color}"></i></div></div>'
             )
+        out.append("</div>")
+        assessment = data.get("assessment") or build_assessment(data, now=now)
+        out.append(self._assessment_html(assessment))
         out.append(
-            '</div><div class="section-title">角色军团历史 <small>按加入时间倒序 · 日期 UTC+8</small></div><div class="history">'
+            '<div class="section-title">角色军团历史 <small>按加入时间倒序 · 日期 UTC+8</small></div><div class="history">'
         )
         for i, r in enumerate(hist[:8]):
             start = dt.datetime.fromisoformat(r["start_date"].replace("Z", "+00:00")).astimezone(tz)
@@ -200,6 +204,7 @@ class KbProfileRenderer:
             )
         height = (
             2
+            + 757
             + 176
             + 61
             + 60
@@ -219,3 +224,46 @@ class KbProfileRenderer:
         font = KbKillmailRenderer._font_data_url()
         head = f"""<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=748,initial-scale=1"><meta name="astrbot-render-size" content="748x{height}"><title>KBINFO 角色战力报告</title><style>@font-face{{font-family:CangEr;src:url('{font}') format('woff2');font-display:block}}{css}</style></head>"""
         return head + "<body>" + "".join(out)
+
+    @staticmethod
+    def _assessment_html(a):
+        def esc(value):
+            return html.escape(str(value))
+
+        def score(v):
+            return f"{v:.1f} / 10" if v is not None else "样本不足"
+
+        parts = [
+            '<div class="section-title">战力评估 <small>舰队表现与单兵能力分开看</small></div><section class="assessment">',
+            f'<div class="assessment-label">{esc(a["label"])}</div>',
+            f'<div class="assessment-source">{esc(a["source"])} · 数据：zKillboard</div>',
+            '<div class="assessment-scores">',
+        ]
+        for (label, value), color in zip(a["scores"].items(), ["gold", "green", "cyan", "red"]):
+            parts.append(
+                f'<div>{esc(label)}<b>{score(value)}</b><div class="track"><i style="width:{(value or 0) * 10}%;background:var(--{color})"></i></div></div>'
+            )
+        parts.append(f"</div><blockquote>{esc(a['summary'])}</blockquote>")
+        for title, key, color in [
+            ("强的地方", "strengths", "green"),
+            ("弱的地方", "weaknesses", "red"),
+        ]:
+            parts.append(
+                f'<div class="assessment-list"><strong style="color:var(--{color})">{title}</strong><ul>'
+            )
+            parts.extend(f"<li>{esc(line)}</li>" for line in a[key])
+            parts.append("</ul></div>")
+        parts.append(
+            f'<div class="assessment-total">总体评分：舰队作战 {score(a["fleet"])} · 单人作战 {score(a["solo"])}</div>'
+        )
+        parts.append('<div class="assessment-conclusion">')
+        for title, key in [
+            ("结论", "conclusion"),
+            ("招人视角", "recruiter"),
+            ("对手视角", "opponent"),
+        ]:
+            parts.append(f"<p><b>{title}</b> {esc(a[key])}</p>")
+        parts.append(
+            '</div><div class="assessment-source">评分为公开战绩代理指标；出勤表示公开战斗频次，不代表在线时长。近期分析最多抽样 400 条 KM。</div></section>'
+        )
+        return "".join(parts)

@@ -8,6 +8,7 @@ from dataclasses import dataclass
 
 import requests
 
+from .assessment import apply_commentary, build_assessment, commentary_prompt
 from .client import KbClient, KbReport
 from .profile_client import KbProfileClient
 from .profile_renderer import KbProfileRenderer
@@ -29,7 +30,7 @@ class KbFeature:
         self.profile_client = KbProfileClient(client)
         self.profile_renderer = KbProfileRenderer(renderer.catalog) if renderer else None
 
-    async def query_info(self, message: str) -> KbImageReply:
+    async def query_info(self, message: str, *, commentator=None) -> KbImageReply:
         name = re.sub(r"^/?kbinfo(?:\s+|$)", "", message.strip(), count=1).strip()
         if not name or len(name) > 100:
             return KbImageReply("用法：/kbinfo 角色名，例如 /kbinfo Yuxan Axiom")
@@ -40,6 +41,16 @@ class KbFeature:
             return KbImageReply("角色战力数据查询失败，请稍后重试。")
         if data is None:
             return KbImageReply(f"未找到角色：{name}\n请检查角色名是否完整，名称支持空格。")
+        assessment = build_assessment(data)
+        if commentator is not None:
+            try:
+                response = await asyncio.wait_for(commentator(commentary_prompt(assessment)), 45)
+                assessment = apply_commentary(assessment, response)
+                assessment["source"] = "规则评分 · AstrBot 当前会话模型点评"
+            except Exception:
+                logger.warning("KBINFO AI 点评不可用，保留规则评估", exc_info=True)
+                assessment["source"] = "规则评估 · AI 点评暂不可用"
+        data = {**data, "assessment": assessment}
         stats = data["stats"]
         text = (
             f"【角色战力报告】{data['identity'][1]}\n"
@@ -47,6 +58,19 @@ class KbFeature:
             f"ISK 摧毁：{self._format_isk(stats.get('iskDestroyed', 0))}\n"
             f"ISK 损失：{self._format_isk(stats.get('iskLost', 0))}\n"
             f"https://zkillboard.com/character/{data['identity'][0]}/"
+        )
+        score_text = "｜".join(
+            f"{key} {value:g}/10" if value is not None else f"{key} 样本不足"
+            for key, value in assessment["scores"].items()
+        )
+        text += (
+            f"\n【战力评估】{assessment['label']}\n{score_text}\n{assessment['summary']}"
+            + "\n强的地方："
+            + "；".join(assessment["strengths"])
+            + "\n弱的地方："
+            + "；".join(assessment["weaknesses"])
+            + f"\n结论：{assessment['conclusion']}\n招人视角：{assessment['recruiter']}"
+            + f"\n对手视角：{assessment['opponent']}\n{assessment['source']}"
         )
         if self.profile_renderer is None:
             return KbImageReply(text)

@@ -129,3 +129,68 @@ class ProfileFeatureTests(unittest.IsolatedAsyncioTestCase):
             query.side_effect = requests.Timeout()
             with self.assertLogs("plugin.features.kb.service", level="ERROR"):
                 self.assertIn("查询失败", (await feature.query_info("/kbinfo Pilot A")).text)
+
+
+class AssessmentTests(unittest.IsolatedAsyncioTestCase):
+    def test_missing_months_unknown_solo_and_old_sample(self):
+        from plugin.features.kb.assessment import build_assessment
+
+        data = profile()
+        data["records"][0]["killmail_time"] = "2024-01-01T00:00:00Z"
+        data["records"] = data["records"][:1]
+        a = build_assessment(data, now=dt.datetime(2026, 10, 22, tzinfo=dt.timezone.utc))
+        self.assertIsNone(a["scores"]["出勤"])
+        self.assertIsNone(a["scores"]["单兵"])
+        self.assertIsNone(a["fleet"])
+        self.assertGreater(a["facts"]["最近公开KM距今天数"], 365)
+        data["stats"].update(months={"202410": {"shipsDestroyed": 1000}}, soloKills=1)
+        a = build_assessment(data, now=dt.datetime(2026, 10, 22, tzinfo=dt.timezone.utc))
+        self.assertEqual(a["scores"]["出勤"], 0)
+        self.assertEqual(a["scores"]["单兵"], 5)
+
+    async def test_ai_success_escape_and_failure_keep_report(self):
+        import json
+        from unittest.mock import AsyncMock
+
+        feature = KbFeature(KbClient(), KbKillmailRenderer(Mock(), Mock()))
+        feature.renderer.catalog.get_type.return_value = None
+        payload = dict(
+            label="<AI>",
+            summary="近期样本有限",
+            strengths=["累计战绩可参考"],
+            weaknesses=["缺少月度统计"],
+            conclusion="谨慎判断",
+            recruiter="核实角色定位",
+            opponent="观察近期舰船",
+        )
+        with patch.object(feature.profile_client, "query", return_value=profile()):
+            ai = AsyncMock(return_value=json.dumps(payload))
+            reply = await feature.query_info("/kbinfo Pilot", commentator=ai)
+            self.assertIn("&lt;AI&gt;", reply.html)
+            self.assertIn("当前会话模型点评", reply.text)
+            self.assertIn("样本不足", reply.text)
+            ai.assert_awaited_once()
+            for response in ("invalid JSON", '{"label":"bad"}'):
+                with self.assertLogs("plugin.features.kb.service", level="WARNING"):
+                    reply = await feature.query_info(
+                        "/kbinfo Pilot", commentator=AsyncMock(return_value=response)
+                    )
+                self.assertIn("AI 点评暂不可用", reply.html)
+                self.assertIn("角色军团历史", reply.html)
+
+    async def test_session_provider_is_used_without_conversation_history(self):
+        from types import SimpleNamespace
+        from unittest.mock import AsyncMock
+
+        from plugin.adapters.astrbot.kb_assessment import session_commentator
+
+        context = SimpleNamespace(
+            get_current_chat_provider_id=AsyncMock(return_value="session-model"),
+            llm_generate=AsyncMock(return_value=SimpleNamespace(completion_text="{}")),
+        )
+        self.assertEqual(await session_commentator(context, "group:123")("facts"), "{}")
+        context.get_current_chat_provider_id.assert_awaited_once_with("group:123")
+        self.assertEqual(
+            context.llm_generate.await_args.kwargs["chat_provider_id"], "session-model"
+        )
+        self.assertNotIn("contexts", context.llm_generate.await_args.kwargs)

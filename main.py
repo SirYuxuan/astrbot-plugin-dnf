@@ -17,6 +17,7 @@ from .plugin.adapters.astrbot.commands import (
     stop_event_propagation,
     unified_origin,
 )
+from .plugin.adapters.astrbot.kb_assessment import session_commentator
 from .plugin.adapters.astrbot.notifications import AstrBotGroupNotifier
 from .plugin.application import PluginApplication
 from .plugin.core.config import PluginConfig
@@ -241,6 +242,7 @@ class DNF_Plugin(Star):
             "KB 角色战力",
             self.app.kb.query_info,
             message_text(event),
+            commentator=session_commentator(self.context, unified_origin(event)),
             html_renderer=self.html_render,
         )
 
