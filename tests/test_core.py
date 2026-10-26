@@ -49,6 +49,7 @@ class ConfigTests(unittest.TestCase):
                 "egg",
                 "rat",
                 "info",
+                "lp",
                 "translate",
                 "navigation",
                 "where",

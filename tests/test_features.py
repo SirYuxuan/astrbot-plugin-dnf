@@ -761,7 +761,7 @@ class FormattingTests(unittest.TestCase):
             "/suballkb",
         ):
             self.assertIn(command, text)
-        self.assertEqual(text.count("需在管理系统注册"), 2)
+        self.assertEqual(text.count("需在管理系统注册"), 3)
 
     def test_timer_accepts_supported_duration_formats(self):
         expected = dt.timedelta(days=2, hours=2, minutes=5)

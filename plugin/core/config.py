@@ -33,6 +33,10 @@ DEFAULT_CONFIG = {
         "url": "https://admin-api.oofo.cc/game/eve/public/users/by-qq/{qq}/info",
         "request_timeout_seconds": 10,
     },
+    "lp": {
+        "url": "https://admin-api.oofo.cc/game/eve/public/users/by-qq/{qq}/lp",
+        "request_timeout_seconds": 15,
+    },
     "translate": {
         "url": "https://admin-api.oofo.cc/game/eve/public/translate",
         "request_timeout_seconds": 10,

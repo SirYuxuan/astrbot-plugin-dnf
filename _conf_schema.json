@@ -157,6 +157,25 @@
       }
     }
   },
+  "lp": {
+    "description": "EVE 无限燃烧 LP 收益",
+    "hint": "按发送者 QQ 查询全部绑定角色，也可在命令中指定角色名。",
+    "type": "object",
+    "items": {
+      "url": {
+        "description": "接口地址",
+        "hint": "支持 /lp/{qq}，也兼容旧版 /lp?qq={qq}。{qq} 会替换为发送者 QQ。",
+        "type": "string",
+        "default": "https://admin-api.oofo.cc/game/eve/public/users/by-qq/{qq}/lp"
+      },
+      "request_timeout_seconds": {
+        "description": "请求超时",
+        "hint": "LP 接口单次请求超时秒数。",
+        "type": "int",
+        "default": 15
+      }
+    }
+  },
   "translate": {
     "description": "EVE 名称翻译",
     "hint": "通过公开接口查询 EVE 中英文名称。",

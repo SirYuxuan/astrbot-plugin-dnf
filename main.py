@@ -114,6 +114,14 @@ class DNF_Plugin(Star):
             event, "info", self.app.info.query, actor_id(event), error_text=EVE_BINDING_HINT
         )
 
+    @filter.command("lp")
+    async def lp(self, event):
+        """查询绑定 EVE 角色的 LP 收益统计，可指定角色名。"""
+        yield await query_result(
+            event, "LP收益", self.app.lp.query, message_text(event), actor_id(event),
+            error_text=EVE_BINDING_HINT,
+        )
+
     @filter.command("fitt")
     async def fitting(self, event):
         """仅在 QQ 私聊中分步导入 EVE 配置。"""

@@ -29,6 +29,7 @@
 | PLEX | `/jt PLEX` | PLEX/伊甸币查询全球 PLEX 市场 |
 | EVE 合计查价 | `/col 中级水晶` | 查询一个或多个匹配物品，并汇总最低卖价；也支持末尾数量 |
 | KB 战绩 | `/kb Yuxan Axiom` | 按完整角色名查询 zKillboard 公开战绩 |
+| EVE LP 收益 | `/lp`、`/lp Yuxan Nova` | 查询全部绑定角色或指定角色的无限燃烧收益统计 |
 | KB 最近击杀/损失 | `/kbk 角色名`、`/kbl 角色名` | 按角色名获取最近一次击杀或损失，生成详细战报图片 |
 | KB 角色战力报告 | `/kbinfo Yuxan Axiom` | 按角色名生成战力图片：四维评分、AI 战力点评、军团历史、常用与损失舰船、12 个月趋势、UTC+8 活跃时段和最近 10 条 KM；近期数据最多抽样 400 条 |
 | 军团、联盟 KB | `/kb 军团 The Ninth Person`、`/kb 联盟 Brotherhood of Spacers` | 按完整名称查询军团或联盟统计 |

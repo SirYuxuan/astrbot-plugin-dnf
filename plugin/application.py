@@ -31,6 +31,8 @@ from .features.kb.renderer import KbKillmailRenderer
 from .features.kb.service import KbFeature
 from .features.kb_watch.client import ZkillLiveClient
 from .features.kb_watch.service import KbWatchFeature
+from .features.lp.client import LpClient
+from .features.lp.service import LpFeature
 from .features.navigation.client import WaypointClient
 from .features.navigation.service import NavigationFeature
 from .features.oil.service import OilFeature
@@ -67,6 +69,12 @@ class PluginApplication:
             InfoClient(
                 url=str(config.get("info.url", InfoClient.DEFAULT_URL)),
                 timeout=int(config.get("info.request_timeout_seconds", 10)),
+            )
+        )
+        self.lp = LpFeature(
+            LpClient(
+                url=str(config.get("lp.url", LpClient.DEFAULT_URL)),
+                timeout=int(config.get("lp.request_timeout_seconds", 15)),
             )
         )
         self.translate = TranslateFeature(

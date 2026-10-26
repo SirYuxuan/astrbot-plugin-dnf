@@ -149,6 +149,7 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
                             "rat",
                             "subrat",
                             "info",
+                            "lp",
                             "fitt",
                             "tr",
                             "nav",
