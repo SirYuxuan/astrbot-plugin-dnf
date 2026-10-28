@@ -6,12 +6,18 @@ logger = logging.getLogger(__name__)
 
 
 OIL_API_URL = "https://www.iamwawa.cn/oilprice/api"
+# The provider returns HTTP 403 for requests' default User-Agent.
+OIL_API_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (compatible; astrbot-plugin-dnf/1.9)",
+}
 OIL_PRICE_KEYS = ("p92", "p95", "p98", "p0", "p10", "p20", "p35")
 
 
 def fetch_oil_data(area: str) -> dict | None:
     try:
-        response = requests.get(OIL_API_URL, params={"area": area}, timeout=10)
+        response = requests.get(
+            OIL_API_URL, params={"area": area}, headers=OIL_API_HEADERS, timeout=10
+        )
         response.raise_for_status()
         data = response.json()
     except Exception as e:
