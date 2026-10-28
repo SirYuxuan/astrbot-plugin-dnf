@@ -150,6 +150,8 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
                             "subrat",
                             "info",
                             "lp",
+                            "pap",
+                            "paprank",
                             "fitt",
                             "tr",
                             "nav",
@@ -171,6 +173,21 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
                     )
                     await plugin.initialize()
                     await plugin.initialize()
+                    pap_event = SimpleNamespace(
+                        plain_result=lambda text: text,
+                        get_sender_id=lambda: "12345678",
+                        should_call_llm=Mock(),
+                    )
+                    with patch.object(
+                        plugin.app.pap, "query", new=AsyncMock(return_value="PAP 报告")
+                    ) as query:
+                        self.assertEqual([x async for x in plugin.pap(pap_event)], ["PAP 报告"])
+                        query.assert_awaited_once_with("12345678")
+                    with patch.object(
+                        plugin.app.pap, "ranking", new=AsyncMock(return_value="Top10")
+                    ) as ranking:
+                        self.assertEqual([x async for x in plugin.pap_rank(pap_event)], ["Top10"])
+                        ranking.assert_awaited_once_with()
                     qa_event = SimpleNamespace(
                         message_str="/add .xx 解答  答\n第二行",
                         plain_result=lambda text: text,

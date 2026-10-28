@@ -36,6 +36,8 @@ from .features.lp.service import LpFeature
 from .features.navigation.client import WaypointClient
 from .features.navigation.service import NavigationFeature
 from .features.oil.service import OilFeature
+from .features.pap.client import PapClient
+from .features.pap.service import PapFeature
 from .features.qa.service import QaFeature
 from .features.rat.client import RatClient
 from .features.rat.service import RatFeature, RatSubscriptionFeature
@@ -102,6 +104,13 @@ class PluginApplication:
             )
         )
         self.timer = TimerFeature()
+        self.pap = PapFeature(
+            PapClient(
+                user_url=str(config.get("pap.user_url", PapClient.USER_URL)),
+                ranking_url=str(config.get("pap.ranking_url", PapClient.RANKING_URL)),
+                timeout=int(config.get("pap.request_timeout_seconds", 15)),
+            )
+        )
         self.ship = ShipFeature(
             ShipClient(
                 info_url=str(config.get("ship.info_url", ShipClient.DEFAULT_INFO_URL)),

@@ -122,6 +122,18 @@ class DNF_Plugin(Star):
             error_text=EVE_BINDING_HINT,
         )
 
+    @filter.command("pap")
+    async def pap(self, event):
+        """按发送者 QQ 查询 PAP 余额和累计收支。"""
+        prevent_default_reply(event)
+        yield await query_result(event, "PAP", self.app.pap.query, actor_id(event))
+
+    @filter.command("paprank")
+    async def pap_rank(self, event):
+        """查询累计获得 PAP 的前十名。"""
+        prevent_default_reply(event)
+        yield await query_result(event, "PAP 排行榜", self.app.pap.ranking)
+
     @filter.command("fitt")
     async def fitting(self, event):
         """仅在 QQ 私聊中分步导入 EVE 配置。"""

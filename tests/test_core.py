@@ -50,6 +50,7 @@ class ConfigTests(unittest.TestCase):
                 "rat",
                 "info",
                 "lp",
+                "pap",
                 "translate",
                 "navigation",
                 "where",

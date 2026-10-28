@@ -1,0 +1,1 @@
+"""Public EVE PAP queries."""

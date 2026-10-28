@@ -41,6 +41,11 @@ DEFAULT_CONFIG = {
         "url": "https://admin-api.oofo.cc/game/eve/public/translate",
         "request_timeout_seconds": 10,
     },
+    "pap": {
+        "user_url": "https://dijiuren.top/api/game/eve/public/pap/users/by-qq/{qq}",
+        "ranking_url": "https://dijiuren.top/api/game/eve/public/pap/ranking",
+        "request_timeout_seconds": 15,
+    },
     "navigation": {
         "url": "https://admin-api.oofo.cc/game/eve/public/users/by-qq/{qq}/waypoint",
         "request_timeout_seconds": 15,

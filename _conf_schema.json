@@ -536,5 +536,30 @@
         "default": "astrbot-plugin-dnf/1.7 (+https://github.com/SirYuxuan/astrbot-plugin-dnf)"
       }
     }
+  },
+  "pap": {
+    "description": "EVE PAP 查询",
+    "hint": "/pap 使用发送者 QQ；/paprank 查询累计获得 Top10。",
+    "type": "object",
+    "items": {
+      "user_url": {
+        "description": "个人 PAP 接口",
+        "hint": "{qq} 替换为发送者 QQ。",
+        "type": "string",
+        "default": "https://dijiuren.top/api/game/eve/public/pap/users/by-qq/{qq}"
+      },
+      "ranking_url": {
+        "description": "累计获得排行榜接口",
+        "hint": "公开 Top10 接口。",
+        "type": "string",
+        "default": "https://dijiuren.top/api/game/eve/public/pap/ranking"
+      },
+      "request_timeout_seconds": {
+        "description": "请求超时",
+        "hint": "单次请求超时秒数。",
+        "type": "int",
+        "default": 15
+      }
+    }
   }
 }
